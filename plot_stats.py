@@ -55,6 +55,11 @@ def main(req_obs, unc):
     Creates plots comparing verification scores from manually produced
     TAFs to those of first guess TAFs
     """
+    # Make directories if needed
+    for p_dir in ['rl_plots', 'scatter_plots']:
+        if not os.path.exists(f'{STATS_DIR}/{p_dir}'):
+            os.makedirs(f'{STATS_DIR}/{p_dir}')
+
     # Get random set of colours to assign to the airports
     color_dict = get_color_dict()
 
