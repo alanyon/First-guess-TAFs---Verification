@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 from itertools import cycle, islice
+import pandas as pd
 import seaborn as sns
 
 import matplotlib.pyplot as plt
@@ -29,25 +30,14 @@ END = os.environ['VERIF_END']
 
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud base'}
-TAF_TYPES = {'bd': 'BestData', 'im': 'IMPROVER', 'is': 'Manual'}
+TAF_TYPES = {'ol': 'Old', 'ma': 'Manual', 'nr': 'New_rf', 'nx': 'New_xg'}
+TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
 NUM_CATS = {'vis': 6, 'clb': 5}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {'clb_9': 0.517, 'clb_24': 0.468, 'clb_30': 0.457, 'vis_9': 0.426,
            'vis_24': 0.345, 'vis_30': 0.366}
 MARKERS = ['o', 'v', 'P', 'X', 's', 'p', '*', 'D']
 SIZES = [50, 50, 60, 50, 50, 60, 80, 40]
-ICAO_DICT = {
-    'EGAA': 'Belfast International', 'EGAC': 'Belfast City', 
-    'EGBB': 'Birmingham', 'EGCC': 'Manchester', 'EGCN': 'Doncaster', 
-    'EGFF': 'Cardiff', 'EGGD': 'Bristol', 'EGGP': 'Liverpool',
-    'EGKK': 'Gatwick', 'EGLL': 'Heathrow', 'EGNJ': 'Humberside', 
-    'EGNT': 'Newcastle', 'EGNX': 'East Midlands', 'EGPD': 'Aberdeen', 
-    'EGPE': 'Inverness', 'EGPF': 'Glasgow', 'EGPH': 'Edinburgh', 
-    'EGPO': 'Stornoway', 'EGSS': 'Stansted', 'EGHH': 'Bournemouth',
-    'EGNH': 'Blackpool', 'EGNM': 'Leeds', 'EGNV': 'Teeside',
-    'EGHI': 'Southampton', 'EGNC': 'Carlisle', 'EGNR': 'Hawarden',
-    'EGSY': 'St Athan', 'EGTE': 'Exeter'
-}
 
 
 def main(req_obs, unc):
@@ -59,6 +49,9 @@ def main(req_obs, unc):
     for p_dir in ['rl_plots', 'scatter_plots']:
         if not os.path.exists(f'{STATS_DIR}/{p_dir}'):
             os.makedirs(f'{STATS_DIR}/{p_dir}')
+
+    # Get dictionary mapping ICAOs to airport names
+    icao_dict = get_icao_dict()
 
     # Get random set of colours to assign to the airports
     color_dict = get_color_dict()
@@ -80,20 +73,20 @@ def main(req_obs, unc):
         for comb in COMBS:
 
             # Scatter plots showing Gerrity and Peirce scores for all airports
-            make_plot(param, color_dict, stats_dict, 'g', unc, comb)
-            make_plot(param, color_dict, stats_dict, 'bp', unc, comb)
-            make_plot(param, color_dict, stats_dict, 'sp', unc, comb,
-                      cat='all')
+            make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
+            make_plot(param, color_dict, stats_dict, 'bp', unc, comb, icao_dict)
+            make_plot(param, color_dict, stats_dict, 'sp', unc, comb, 
+                      icao_dict, cat='all')
 
             # Make scatter plot showing TAF length specific Gerrity scores
             for length in [9, 24, 30]:
                 make_plot(param, color_dict, stats_dict, 'g', unc, comb,
-                          length=length)
+                          icao_dict, length=length)
 
             # Make scatter plots showing Peirce scores
             for cat in range(1, NUM_CATS[param] + 1):
                 make_plot(param, color_dict, stats_dict, 'sp', unc, comb,
-                          cat=cat)
+                          icao_dict, cat=cat)
 
 
 def get_stats(param, unc, req_obs):
@@ -118,12 +111,7 @@ def get_stats(param, unc, req_obs):
                 continue
 
             # Get first part of key to add to dictionary depending on TAF type
-            if row[2] == 'BestData':
-                f_key = 'bd'
-            elif row[2] == 'Improver':
-                f_key = 'im'
-            elif row[2] == 'Operational':
-                f_key = 'is'
+            f_key = TAF_TYPES_INV[row[2]]
 
             # Add airport to stats dictionary if necessary
             if row[0] not in stats_dict:
@@ -151,7 +139,7 @@ def get_stats(param, unc, req_obs):
             
                 # Check that airport has sufficient data (should be same
                 # number of obs in both types of TAF so only need to check one)
-                if f_key == 'im':
+                if f_key == 'ol':
                     stats_dict = check_obs(stats_dict, row, req_obs)
 
     # Remove airports with insufficient data
@@ -266,8 +254,27 @@ def check_obs(stats_dict, row, req_obs):
     return stats_dict
 
 
-def make_plot(param, color_dict, stats_dict, score, unc, comb, length='',
-              cat=''):
+def get_icao_dict():
+    """
+    Creates a dictionary mapping ICAO codes to airport names.
+
+    Args:
+        None
+    Returns:
+        icao_dict (dict): Dictionary mapping ICAO codes to airport names
+    """
+    # Load in airport info
+    airport_info = pd.read_csv('taf_info.csv', header=0)
+
+    # Create dictionary mapping ICAO codes to airport names
+    icao_dict = pd.Series(airport_info.airport_name.values, 
+                          index=airport_info.icao).to_dict()
+
+    return icao_dict
+
+
+def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict, 
+              length='', cat=''):
     """
     Creates a scatter plot.
     """
@@ -298,7 +305,7 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, length='',
 
     # Plot scatter points for each airport
     for stat_1, stat_2, airport in zip(stats_1, stats_2, airports):
-        label = ICAO_DICT[airport]
+        label = icao_dict[airport]
         ax.scatter(stat_1, stat_2, color=color_dict[airport]['colour'],
                    s=color_dict[airport]['size'],
                    marker=color_dict[airport]['marker'], label=label,
@@ -580,14 +587,14 @@ def calc_min_obs(s_str, e_str):
     sdt, edt = [datetime.strptime(d_str, '%Y%m%d') for d_str in [s_str, e_str]]
 
     # Get number of days between start and end of verification period
-    vdays = (edt - sdt).days
+    vdays = (edt - sdt).days * 0.2
 
     # Average of 1 TAFs per day required (2 obs per hour expected)
     min_obs_30hr =  1 * 2 * 30 * vdays
     min_obs_24hr =  1 * 2 * 24 * vdays
     min_obs_9hr =  1 * 2 * 9 * vdays
 
-    # TESTING ===================================
+    # # TESTING ===================================
     # min_obs_30hr =  0
     # min_obs_24hr =  0
     # min_obs_9hr =  0
