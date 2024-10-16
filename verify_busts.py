@@ -31,11 +31,12 @@ sns.set(font_scale=1.5)
 
 # Accepted first guess TAFs
 DATA_DIR = ('/data/users/alanyon/tafs/improver/verification/'
-            '20230805-20240805_ml')
+            '20230805-20241004_ml')
 OLD_TAFS = f'{DATA_DIR}/decodes/Output_old/acceptedTafs.csv'
-NEW_TAFS = f'{DATA_DIR}/decodes/Output_new_rf/acceptedTafs.csv'
+NEW_XG_TAFS = f'{DATA_DIR}/decodes/Output_new_xg/acceptedTafs.csv'
+NEW_RF_TAFS = f'{DATA_DIR}/decodes/Output_new_rf/acceptedTafs.csv'
 START_DT = datetime(2023, 8, 5)
-END_DT = datetime(2024, 8, 5)
+END_DT = datetime(2024, 10, 5)
 DAYS = list(rrule(DAILY, interval=1, dtstart=START_DT, until=END_DT))
 # For extracting from metdb
 METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
@@ -48,35 +49,46 @@ NUM_TO_DIR = dict(zip(range(0, 370, 10),
 B_TYPES = ['increase', 'decrease', 'dir']
 DIRS = ['N', 'E', 'S', 'W', 'VRB']
 # String names of lists and dictionaries used to collect data
-NAMES = ['wind_stats', 'vis_stats', 'cld_stats', 'old_dirs', 'new_dirs',
-         'is_dirs', 'metar_dirs', 'metars_used', 'wind_info', 'vis_info', 
-         'cld_info', 'all_info', 'all_stats', 'last_day']
+NAMES = ['wind_stats', 'vis_stats', 'cld_stats', 'old_dirs', 'xg_dirs', 
+         'rf_dirs', 'man_dirs', 'metar_dirs', 'metars_used', 'wind_info', 
+         'vis_info', 'cld_info', 'all_info', 'all_stats', 'last_day']
 # Dictionary mapping short weather names to long names
 W_NAMES = {'vis': 'visibility', 'wind': 'wind', 'wx': 'weather',
            'cld': 'cloud', 'all': 'all'}
 P_NAMES = {'vis': 'Visibility', 'wind': 'Wind', 'wx': 'Significant Weather',
            'cld': 'Cloud Base', 'all': 'All'}
 # ICAOS to use
-REQ_ICAOS = [b'EGAA ', b'EGAC ', b'EGCC ', b'EGFF ', b'EGHH ',
+REQ_ICAOS = [b'EGAA ', b'EGAC ', b'EGAE ', b'EGCC ', b'EGCK ', b'EGFF ', 
+             b'EGHH ', b'EGGW ', b'EGKB ', b'EGLF ', b'EGMC ', b'EGMD ',
              b'EGGD ', b'EGGP ', b'EGKK ', b'EGLL ', b'EGNJ ', b'EGNT ', 
-             b'EGNX ', b'EGPD ', b'EGPE ', b'EGPF ', b'EGPH ', b'EGPO ', 
-             b'EGSS ', b'EGNH ', b'EGNM ', b'EGNV ', b'EGSY ', b'EGBB ',
-             b'EGHI ', b'EGNC ', b'EGNR ', b'EGTE ']
-REQ_ICAO_STRS = {'EGAA': 'Belfast International', 'EGAC': 'Belfast City', 
-                 'EGCC': 'Manchester', 'EGHH': 'Bournemouth', 'EGTE': 'Exeter',
-                 'EGFF': 'Cardiff', 'EGBB': 'Birmingham',
-                 'EGGD': 'Bristol', 'EGGP': 'Liverpool', 'EGKK': 'Gatwick', 
-                 'EGLL': 'Heathrow', 'EGNJ': 'Humberside', 'EGNT': 'Newcastle', 
-                 'EGNX': 'East Midlands', 'EGPD': 'Aberdeen', 
-                 'EGPE': 'Inverness', 'EGPF': 'Glasgow', 'EGPH': 'Edinburgh', 
-                 'EGPO': 'Stornoway', 'EGSS': 'Stansted', 'EGNH': 'Blackpool',
-                 'EGNM': 'Leeds', 'EGNV': 'Teeside', 'EGSY': 'St Athan',
-                 'EGHI': 'Southampton', 'EGNC': 'Carlisle', 'EGNR': 'Hawarden'}
+             b'EGNX ', b'EGPE ', b'EGPO ', b'EGPA ', b'EGPB ', b'EGPC ',
+             b'EGNH ', b'EGNM ', b'EGNV ', b'EGSY ', b'EGBB ', b'EGPN ',
+             b'EGHI ', b'EGNC ', b'EGTE ', b'EGPI ', b'EGSH ', b'EGTK ',
+             b'EGPH ', b'EGPK ', b'EGSS ', b'EGPF ', b'EGPD ']
+REQ_ICAO_STRS = {
+    'EGAA': 'Belfast International', 'EGAC': 'Belfast City', 
+    'EGAE': 'Londonderry', 'EGCC': 'Manchester', 'EGCK': 'Caenarfon',
+    'EGHH': 'Bournemouth', 'EGTE': 'Exeter', 'EGFF': 'Cardiff', 
+    'EGBB': 'Birmingham', 'EGGW': 'Luton', 'EGKB': 'Biggin Hill',
+    'EGGD': 'Bristol', 'EGGP': 'Liverpool', 'EGKK': 'Gatwick', 
+    'EGLF': 'Farnborough', 'EGLL': 'Heathrow', 'EGNJ': 'Humberside', 
+    'EGNT': 'Newcastle', 'EGMC': 'Southend', 'EGMD': 'Lydd', 
+    'EGPA': 'Kirkwall', 'EGPB': 'Sumburgh', 'EGPC': 'Wick', 'EGPI': 'Islay',
+    'EGPN': 'Dundee', 'EGNX': 'East Midlands', 'EGSH': 'Norwich',
+    'EGTK': 'Oxford', 'EGPE': 'Inverness', 'EGPO': 'Stornoway', 
+    'EGNH': 'Blackpool', 'EGNM': 'Leeds', 'EGNV': 'Teeside', 
+    'EGSY': 'St Athan', 'EGHI': 'Southampton', 'EGNC': 'Carlisle',
+    'EGPH': 'Edinburgh', 'EGPK': 'Prestwick', 'EGSS': 'Stansted', 
+    'EGPF': 'Glasgow', 'EGPD': 'Aberdeen'}
 # REQ_ICAOS = [b'EGLL ']
 # REQ_ICAO_STRS = {'EGLL': 'Heathrow'}
 
 # TAF type names and abbrieviations
-TAF_TYPES = {'new': 'New', 'old': 'Old', 'is': 'Issued'}
+TAF_TYPES = {'xg': 'New XGBoost', 'rf': 'New Random Forest', 'old': 'Old', 
+             'man': 'Manual'}
+B_TYPES = ['increase', 'decrease', 'both', 'all']
+WB_TYPES = ['increase', 'decrease', 'dir', 'all']
+D_TYPES = ['increase', 'decrease', 'dir']
 
 
 def main(load_data):
@@ -92,28 +104,19 @@ def main(load_data):
         vis_info = {icao: [] for icao in REQ_ICAO_STRS}
         cld_info = {icao: [] for icao in REQ_ICAO_STRS}
         all_info = {icao: [] for icao in REQ_ICAO_STRS}
-        wind_stats_temp = {'old increase': 0, 'old decrease': 0, 'old dir': 0,
-                           'old all': 0, 'new increase': 0, 'new decrease': 0, 
-                           'new dir': 0, 'new all': 0, 'is increase': 0, 
-                           'is decrease': 0, 'is dir': 0, 'is all': 0}
-        stats_temp = {'old increase': 0, 'old decrease': 0, 'old both': 0,
-                      'old all': 0, 'new increase': 0, 'new decrease': 0, 
-                      'new both': 0, 'new all': 0, 'is increase': 0, 
-                      'is decrease': 0, 'is both': 0, 'is all': 0}
+        wind_stats_temp = {f'{t_type} {b_type}': 0 for t_type in TAF_TYPES
+                           for b_type in WB_TYPES}
+        stats_temp = {f'{t_type} {b_type}': 0 for t_type in TAF_TYPES
+                      for b_type in B_TYPES}
         dirs_temp = {'N': 0, 'E': 0, 'S': 0, 'W': 0, 'VRB': 0}
         metars_used = {icao: 0 for icao in REQ_ICAO_STRS}
         metar_dirs = {icao: dirs_temp.copy() for icao in REQ_ICAO_STRS}
-        old_dirs = {icao: {'increase': dirs_temp.copy(),
-                           'decrease': dirs_temp.copy(),
-                           'dir': dirs_temp.copy()}
-                    for icao in REQ_ICAO_STRS}
-        new_dirs = old_dirs.copy()
-        is_dirs = old_dirs.copy()
-        all_stats_temp = {'old wind': 0, 'old vis': 0, 'old wx': 0, 
-                          'old cld': 0, 'old all': 0, 'new wind': 0, 
-                          'new vis': 0, 'new wx': 0, 'new cld': 0, 
-                          'new all': 0, 'is wind': 0, 'is vis': 0, 
-                          'is wx': 0, 'is cld': 0, 'is all': 0}
+        old_dirs = {icao: {b_type: dirs_temp.copy() for b_type in D_TYPES}
+                     for icao in REQ_ICAO_STRS}
+        xg_dirs, rf_dirs, man_dirs = (old_dirs.copy(), old_dirs.copy(), 
+                                      old_dirs.copy())
+        all_stats_temp = {f'{t_type} {w_type}': 0 for t_type in TAF_TYPES
+                          for w_type in W_NAMES}
         wind_stats = {icao: wind_stats_temp.copy() for icao in REQ_ICAO_STRS}
         vis_stats = {icao: stats_temp.copy() for icao in REQ_ICAO_STRS}
         cld_stats = {icao: stats_temp.copy() for icao in REQ_ICAO_STRS}
@@ -123,7 +126,7 @@ def main(load_data):
     # Otherwise, load pickled files
     else:
         (wind_stats, vis_stats, cld_stats,
-         old_dirs, new_dirs, is_dirs, metar_dirs, metars_used,
+         old_dirs, xg_dirs, rf_dirs, man_dirs, metar_dirs, metars_used,
          wind_info, vis_info, cld_info, all_info, all_stats, last_taf) = [
                 uf.unpickle_data(f'{DATA_DIR}/pickles/{name}') 
                 for name in NAMES
@@ -133,233 +136,207 @@ def main(load_data):
     # more data
     if load_data != 'no':
 
+        # Read in first guess TAFs files
+        old_tafs_lines = get_taf_lines(OLD_TAFS)
+        xg_tafs_lines = get_taf_lines(NEW_XG_TAFS)
+        rf_tafs_lines = get_taf_lines(NEW_RF_TAFS)
+
         # Loop though all days in period
         for day in DAYS:
 
-            # Read in first guess TAFs file without machine learning
-            with open(OLD_TAFS, 'r') as old_tafs_file:
-                old_tafs_lines = old_tafs_file.readlines()
+            # Find all TAFs issued on this day
+            day_old_tafs = get_day_tafs(day, old_tafs_lines)
+            day_xg_tafs = get_day_tafs(day, xg_tafs_lines)
+            day_rf_tafs = get_day_tafs(day, rf_tafs_lines)
 
-            # Determine if any TAFs in file issued on this day
-            day_taf_found = False
-            for o_row in old_tafs_lines:
-
-                # Split row by ','
-                o_row = o_row.split(',')
-
-                # Get issue dt of TAF
-                old_idt = datetime.strptime(o_row[10][2:16], '%H%MZ %d/%m/%y')
-
-                if (old_idt - timedelta(hours=1)).date() == day.date():
-                    print(old_idt, day)
-                    day_taf_found = True
-                    break
-
-            # Move to next day if no TAFs found
-            if not day_taf_found:
+            # If no TAFs found, move to next day
+            if not all([day_old_tafs, day_xg_tafs, day_rf_tafs]):
                 continue
 
             # Get all TAFs and METARs for day (3 days for METARs to 
             # cover TAF periods)
             try:
-                day_tafs, day_3_metars = get_day_tafs_metars(day)
+                day_man_tafs, day_3_metars = get_day_man_tafs_metars(day)
             except:
                 print(f'problem retrieving for day: {day}')
                 continue
 
             # Loop through each old TAF and attempt to find equivalent new TAF
-            for o_row in old_tafs_lines:
+            for o_row, xg_row, rf_row in itertools.product(day_old_tafs,
+                                                           day_xg_tafs,
+                                                           day_rf_tafs):
 
-                # Split row by ','
-                o_row = o_row.split(',')
+                # Get required TAF variables
+                old_idt, old_vdt, old_taf, old_icao = get_row_deets(o_row)
+                _, xg_vdt, xg_taf,  xg_icao = get_row_deets(xg_row)
+                _, rf_vdt, rf_taf, rf_icao = get_row_deets(rf_row)
 
-                # Get issue dt of TAF
-                old_idt = datetime.strptime(o_row[10][2:16], '%H%MZ %d/%m/%y')
-
-                # if not correct day, move to next TAF
-                if (old_idt - timedelta(hours=1)).date() != day.date():
+                # Continue to next iteration if wrong validity time or icao
+                if not all([old_vdt == xg_vdt == rf_vdt, 
+                            old_icao == xg_icao == rf_icao]):
                     continue
 
-                # Get other required old TAF variables
-                old_vdt = (datetime.strptime(o_row[4], '%d-%b-%y') +
-                           timedelta(hours=int(o_row[5][:2])))
-                old_taf = o_row[10][46:].split()
-                old_icao = old_taf[0]
+                # Now icaos and vdts must be the same
+                icao = old_icao
+                vdt = old_vdt
+                vday = vdt.date()
 
-                # Read in first guess TAFs file with machine learning
-                with open(NEW_TAFS, 'r') as new_tafs_file:
-                    new_tafs_lines = new_tafs_file.readlines()
+                # Only need info for required ICAOs
+                if icao not in REQ_ICAO_STRS:
+                    continue
 
-                # Find equivalent new TAF
-                for n_row in new_tafs_lines:
+                # Get TAF validity times as python datetime objects
+                old_start, old_end = ConstructTimeObject(old_taf[2], 
+                                                         int(old_taf[2][:2]), 
+                                                         vdt.month, 
+                                                         vdt.year).TAF()
 
-                    # Split row by ','
-                    n_row = n_row.split(',')
+                # Number of METARs to expect during TAF period
+                num_float = (old_end - old_start).total_seconds() / 1800
+                num_metars = int(np.round(num_float))
 
-                    # Get required new TAF variables
-                    new_vdt = (datetime.strptime(n_row[4], '%d-%b-%y') +
-                               timedelta(hours=int(n_row[5][:2])))
-                    new_taf = n_row[10][46:].split()
-                    new_icao = new_taf[0]
+                # Look for TAFs/METARs a bit before start of TAF to 
+                # capture those issued early
+                start_time = old_start - timedelta(hours=2)
+                end_time = old_start + timedelta(hours=2)
 
-                    # Continue to next iteration if wrong validity time or icao
-                    if old_icao != new_icao or old_vdt != new_vdt:
+                # Print for info of progress
+                print(icao, start_time, end_time)
+
+                # Find TAF with correct timings (if no manual TAFs 
+                # found, don't verify either TAF)
+                for man_taf in day_man_tafs[icao]:
+
+                    # Move on to next TAF if no record or cancelled
+                    if man_taf == "NoRecord" or 'CNL' in man_taf:
                         continue
 
-                    # Now icaos and vds must be the same
-                    icao = old_icao
-                    vdt = old_vdt
-                    vday = vdt.date()
-
-                    # Only need info for required ICAOs
-                    if icao not in REQ_ICAO_STRS:
+                    # Check first and last hours match
+                    if man_taf[2] != old_taf[2]:
                         continue
 
-                    # Get TAF validity times as python datetime objects
-                    old_start, old_end = ConstructTimeObject(
-                        old_taf[2], int(old_taf[2][:2]), vdt.month,
+                    # Check last day matches (can be errors in man TAF)
+                    if int(man_taf[2][5:7]) != int(old_taf[2][5:7]):
+                        continue
+
+                    # Get TAF validity time as python datetime 
+                    # objects (assumes month and year same as fg TAF)
+                    man_start, man_end = ConstructTimeObject(
+                        man_taf[2], int(man_taf[2][:2]), vdt.month,
                         vdt.year).TAF()
 
-                    # Number of METARs to expect during TAF period
-                    num_float = (old_end - old_start).total_seconds() / 1800
-                    num_metars = int(np.round(num_float))
+                    # Move to next iteration if times don't match
+                    if not all([old_start == man_start, old_end == man_end]):
+                        continue
 
-                    # Look for TAFs/METARs a bit before start of TAF to 
-                    # capture those issued early
-                    start_time = old_start - timedelta(hours=2)
-                    end_time = old_start + timedelta(hours=2)
+                    # Now start and end times must be the same
+                    start, end = old_start, old_end
 
-                    # Print for info of progress
-                    print(icao, start_time, end_time)
+                    # Verify TAFs against METARs
+                    metars = day_3_metars[icao]
+                    try:
+                        old_busts = CheckTafThread(icao, start, end, old_taf, 
+                                                   metars).run()
+                        xg_busts = CheckTafThread(icao, start, end, xg_taf, 
+                                                  metars).run()
+                        rf_busts = CheckTafThread(icao, start, end, rf_taf, 
+                                                  metars).run()
+                        man_busts = CheckTafThread(icao, start, end, man_taf, 
+                                                   metars).run()
 
-                    # Find TAF with correct timings (if no
-                    # issued TAFs found, don't verify either TAF)
-                    for is_taf in day_tafs[icao]:
+                    # If any issues, move to next iteration
+                    except:
+                        print('Bad TAF old', old_taf)
+                        print('Bad TAF xg', xg_taf)
+                        print('Bad TAF rf', rf_taf)
+                        print('Bad TAF man', man_taf)
+                        print('')
+                        continue
 
-                        # Move on to next TAF if no record or cancelled
-                        if is_taf == "NoRecord" or 'CNL' in is_taf:
+                    # Get list of METARs used for all TAF types
+                    m_old = old_busts['metars_used']
+                    m_xg = xg_busts['metars_used']
+                    m_rf = rf_busts['metars_used']
+                    m_man = man_busts['metars_used']
+                    metars_all = [metar for metar in m_old 
+                                  if all(metar in m_list 
+                                         for m_list in [m_xg, m_rf, m_man])]
+
+                    # Update METAR wind directions dictionary
+                    metar_dirs = update_metar_dirs(icao, metars_all, 
+                                                   metar_dirs)
+
+                    # Add to METARS used count
+                    metars_used[icao] += num_metars
+
+                    # Add to wind stats        
+                    wind_stats, old_dirs = add_stats(wind_stats, icao, 
+                                                     old_busts['wind'], 'old', 
+                                                     'wind', one_wx='wind', 
+                                                     dirs_dict=old_dirs)
+                    wind_stats, xg_dirs = add_stats(wind_stats, icao, 
+                                                    xg_busts['wind'], 'xg', 
+                                                    'wind', one_wx='wind', 
+                                                    dirs_dict=xg_dirs)
+                    wind_stats, rf_dirs = add_stats(wind_stats, icao, 
+                                                    rf_busts['wind'], 'rf', 
+                                                    'wind', one_wx='wind', 
+                                                    dirs_dict=rf_dirs)
+                    wind_stats, man_dirs = add_stats(wind_stats, icao, 
+                                                     man_busts['wind'], 'man', 
+                                                     'wind', one_wx='wind', 
+                                                     dirs_dict=man_dirs)
+
+                    # Add to wind, vis and cld stats
+                    vc_busts = {'old': old_busts, 'xg': xg_busts, 
+                                'rf': rf_busts, 'man': man_busts}
+                    for t_type in vc_busts:
+                        vis_stats =  add_stats(vis_stats, icao, 
+                                               vc_busts[t_type]['visibility'], 
+                                               t_type, 'vis', one_wx='vis')
+                        cld_stats =  add_stats(cld_stats, icao, 
+                                               vc_busts[t_type]['cloud'],
+                                               t_type, 'cld', one_wx='cld')
+
+                    # Add to other stats dictionaries
+                    for w_type, w_lng in W_NAMES.items():
+                        all_stats = add_stats(all_stats, icao, 
+                                              old_busts[w_lng], 'old', w_type)
+                        all_stats = add_stats(all_stats, icao, xg_busts[w_lng], 
+                                              'xg', w_type)
+                        all_stats = add_stats(all_stats, icao, rf_busts[w_lng], 
+                                              'rf', w_type)
+                        all_stats = add_stats(all_stats, icao, man_busts[w_lng], 
+                                              'man', w_type)
+
+                    # Add to info dictionaries
+                    info_dicts = [wind_info, vis_info, cld_info, all_info]
+                    info_w_types = ['wind', 'vis', 'cld', 'all']
+                    for info_dict, w_type in zip(info_dicts, info_w_types):
+                        w_lng = W_NAMES[w_type]
+
+                        # Don't bother appending info if no busts
+                        if not all([old_busts[w_lng], xg_busts[w_lng],
+                                    rf_busts[w_lng], man_busts[w_lng]]):
                             continue
 
-                        # Check first and last hours match
-                        if is_taf[2] != old_taf[2]:
-                            continue
+                        # Otherwise, append info
+                        info_dict[icao].append([old_taf, old_busts[w_lng],
+                                                xg_taf, xg_busts[w_lng],
+                                                rf_taf, rf_busts[w_lng],
+                                                man_taf, man_busts[w_lng]])
 
-                        # Check last day matches (can be errors in 
-                        # issued TAF)
-                        if int(is_taf[2][5:7]) != int(old_taf[2][5:7]):
-                            continue
-
-                        # Get TAF validity time as python datetime 
-                        # objects (assumes month and year same as fg TAF 
-                        is_start, is_end = ConstructTimeObject(
-                            is_taf[2], int(is_taf[2][:2]), vdt.month,
-                            vdt.year).TAF()
-
-                        # Move to next iteration if times don't match
-                        if old_start != is_start or old_end != is_end:
-                            continue
-
-                        # Now start and end times must be the same
-                        start, end = old_start, old_end
-
-                        # Verify TAFs against METARs
-                        metars = day_3_metars[icao]
-                        try:
-                            old_busts = CheckTafThread(icao, start, end,
-                                                      old_taf, metars).run()
-                            new_busts = CheckTafThread(icao, start, end,
-                                                       new_taf, metars).run()   
-                            is_busts = CheckTafThread(icao, start, end,
-                                                      is_taf, metars).run()
-
-                        # If any issues, move to next iteration
-                        except:
-                            print('Bad TAF old', old_taf)
-                            print('Bad TAF new', new_taf)
-                            print('Bad TAF is', is_taf)
-                            print('')
-                            continue
-
-                        # Get list of METARs used for all TAF types
-                        m_old = old_busts['metars_used']
-                        m_new = new_busts['metars_used']
-                        m_is = is_busts['metars_used']
-                        metars_both = [metar for metar in m_old 
-                                       if metar in m_new and metar in m_is]
-
-                        # Update METAR wind directions dictionary
-                        metar_dirs = update_metar_dirs(icao, metars_both, 
-                                                       metar_dirs)
-
-                        # Add to METARS used count
-                        metars_used[icao] += num_metars
-
-                        # Add to wind stats
-                        wind_stats, old_dirs = add_stats(
-                            wind_stats, icao, old_busts['wind'], 'old', 'wind', 
-                            one_wx='wind', dirs_dict=old_dirs
-                        )
-                        wind_stats, new_dirs = add_stats(
-                            wind_stats, icao, new_busts['wind'], 'new', 'wind', 
-                            one_wx='wind', dirs_dict=new_dirs
-                        )
-                        wind_stats, is_dirs = add_stats(
-                            wind_stats, icao, is_busts['wind'], 'is', 'wind', 
-                            one_wx='wind', dirs_dict=is_dirs)
-
-                        # Add to wind, vis and cld stats
-                        vc_busts = {'old': old_busts, 'new': new_busts, 
-                                    'is': is_busts}
-                        for t_type in vc_busts:
-                            vis_stats =  add_stats(
-                                vis_stats, icao, 
-                                vc_busts[t_type]['visibility'], t_type, 'vis', 
-                                one_wx='vis')
-                            cld_stats =  add_stats(
-                                cld_stats, icao, vc_busts[t_type]['cloud'],
-                                t_type, 'cld', one_wx='cld')
-
-                        # Add to other stats dictionaries
-                        for w_type, w_lng in W_NAMES.items():
-                            all_stats = add_stats(
-                                all_stats, icao, old_busts[w_lng], 'old', 
-                                w_type
-                            )
-                            all_stats = add_stats(
-                                all_stats, icao, new_busts[w_lng], 'new', 
-                                w_type
-                            )
-                            all_stats = add_stats(
-                                all_stats, icao, is_busts[w_lng], 'is', 
-                                w_type
-                            )
-
-                        # Add to info dictionaries
-                        info_dicts = [wind_info, vis_info, cld_info, all_info]
-                        info_w_types = ['wind', 'vis', 'cld', 'all']
-                        for info_dict, w_type in zip(info_dicts, info_w_types):
-                            w_lng = W_NAMES[w_type]
-
-                            # Don't bother appending info if no busts
-                            if (not old_busts[w_lng] and not new_busts 
-                                and not is_busts[w_lng]):
-                                continue
-
-                            # Otherwise, append info
-                            info_dict[icao].append([old_taf, old_busts[w_lng],
-                                                    new_taf, new_busts[w_lng],
-                                                    is_taf, is_busts[w_lng]])
-
-                        # Break for loop so only one TAF is used
-                        break
+                    # Break for loop so only one TAF is used
+                    break
 
             # Pickle at the end of each day
             uf.pickle_data(wind_stats, f'{DATA_DIR}/pickles/wind_stats')
             uf.pickle_data(vis_stats, f'{DATA_DIR}/pickles/vis_stats')
             uf.pickle_data(cld_stats, f'{DATA_DIR}/pickles/cld_stats')
             uf.pickle_data(old_dirs, f'{DATA_DIR}/pickles/old_dirs')
-            uf.pickle_data(new_dirs, f'{DATA_DIR}/pickles/new_dirs')
-            uf.pickle_data(is_dirs, f'{DATA_DIR}/pickles/is_dirs')
+            uf.pickle_data(xg_dirs, f'{DATA_DIR}/pickles/xg_dirs')
+            uf.pickle_data(rf_dirs, f'{DATA_DIR}/pickles/rf_dirs')
+            uf.pickle_data(man_dirs, f'{DATA_DIR}/pickles/man_dirs')
             uf.pickle_data(metar_dirs, f'{DATA_DIR}/pickles/metar_dirs')
             uf.pickle_data(metars_used, f'{DATA_DIR}/pickles/metars_used')
             uf.pickle_data(wind_info, f'{DATA_DIR}/pickles/wind_info')
@@ -383,16 +360,33 @@ def main(load_data):
     summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
     summary_stats = plot_param(vis_stats, 'vis', summary_stats)
     summary_stats = plot_param(cld_stats, 'cld', summary_stats)
-    summary_stats = plot_param(wind_stats, 'wind', summary_stats)
-    summary_stats = plot_param(wx_stats, 'wx', summary_stats)
+    # summary_stats = plot_param(wind_stats, 'wind', summary_stats)
+    # summary_stats = plot_param(wx_stats, 'wx', summary_stats)
     plot_summary(summary_stats)
 
 
-def get_day_tafs_metars(day):
+def get_day_tafs(day, tafs_lines):
+
+    day_tafs = []
+    for row in tafs_lines:
+
+        # Split row by ','
+        row = row.split(',')
+
+        # Get issue dt of TAF
+        idt = datetime.strptime(row[10][2:16], '%H%MZ %d/%m/%y')
+
+        if (idt - timedelta(hours=1)).date() == day.date():
+            day_tafs.append(row)
+
+    return day_tafs
+
+
+def get_day_man_tafs_metars(day):
     """
-    Extracts from metdb all TAFs for required ICAOs for specified day
-    and all METARs for required ICAOs for specified day and 2 following 
-    days (to cover all valid times covered by TAFs).
+    Extracts from metdb all manual TAFs for required ICAOs for specified 
+    day and all METARs for required ICAOs for specified day and two 
+    following days (to cover all valid times covered by TAFs).
     """
     # Get all TAFs for day
     all_tafs = metdb.obs(
@@ -487,10 +481,19 @@ def get_day_tafs_metars(day):
     return day_tafs, day_3_metars
 
 
+def get_taf_lines(f_path):
+
+    # Read in first guess TAFs file without machine learning
+    with open(f_path, 'r') as tafs_file:
+        tafs_lines = tafs_file.readlines()
+
+    return tafs_lines
+
+
 def get_wx_stats(all_info):
 
     # Dictionary with default zero values
-    wx_stats = {icao: {'old all': 0, 'new all': 0, 'is all': 0} 
+    wx_stats = {icao: {'old all': 0, 'xg all': 0, 'rf all': 0, 'man all': 0} 
                 for icao in all_info}
 
     # Loop through icaos in all_info dictionary
@@ -500,18 +503,21 @@ def get_wx_stats(all_info):
         for taf_list in all_info[icao]:
 
             # Unpack list
-            old_taf, old_busts, new_taf, new_busts, is_taf, is_busts = taf_list
+            _, old_busts, _, xg_busts, _, rf_busts, _, man_busts = taf_list
 
             # Add to bust counts if any weather busts
             for old_bust in old_busts:
                 if 'weather' in old_bust[0]:
                     wx_stats[icao]['old all'] += 1
-            for new_bust in new_busts:
-                if 'weather' in new_bust[0]:
-                    wx_stats[icao]['new all'] += 1
-            for is_bust in is_busts:
-                if 'weather' in is_bust[0]:
-                    wx_stats[icao]['is all'] += 1
+            for xg_bust in xg_busts:
+                if 'weather' in xg_bust[0]:
+                    wx_stats[icao]['xg all'] += 1
+            for rf_bust in rf_busts:
+                if 'weather' in rf_bust[0]:
+                    wx_stats[icao]['rf all'] += 1
+            for man_bust in man_busts:
+                if 'weather' in man_bust[0]:
+                    wx_stats[icao]['man all'] += 1
 
     return wx_stats
 
@@ -632,6 +638,20 @@ def get_dir_percs(taf_dirs, metar_dirs):
     return taf_dirs
 
 
+def get_row_deets(row):
+
+    # Get issue dt of TAF
+    idt = datetime.strptime(row[10][2:16], '%H%MZ %d/%m/%y')
+
+    # Get required details from row
+    vdt = (datetime.strptime(row[4], '%d-%b-%y') +
+           timedelta(hours=int(row[5][:2])))
+    taf = row[10][46:].split()
+    icao = taf[0]
+
+    return idt, vdt, taf, icao
+    
+
 def plot_all(stats_abs, metars, info, t_type_1, t_type_2):
     """
     Plots bar chart showing all bust information.
@@ -707,25 +727,33 @@ def plot_param(stats_abs, param, summary_stats):
     if param == 'wind':
         bust_types = [f'Observed {W_NAMES[param]} higher', 
                       f'Observed {W_NAMES[param]} lower', 
-                      f'Difference in {W_NAMES[param]} direction'] * 3
-        taf_types = (['Old First Guess TAFs'] * 3 
-                     + ['New First Guess TAFs'] * 3 
-                     + ['Manual TAFs'] * 3)
-        bust_keys = ['old increase', 'old decrease', 'old dir', 'new increase', 
-                     'new decrease', 'new dir', 'is increase', 'is decrease', 
-                     'is dir']
+                      f'Difference in {W_NAMES[param]} direction'
+                      'Total wind busts'] * 4
+        taf_types = (['Old First Guess TAFs'] * 4 
+                     + ['New First Guess TAFs (XGBoost)'] * 4
+                     + ['New First Guess TAFs (Random Forest)'] * 4 
+                     + ['Manual TAFs'] * 4)
+        bust_keys = ['old increase', 'old decrease', 'old dir' 'old all', 
+                     'xg increase', 'xg decrease', 'xg dir', 'old all',
+                     'rf increase', 'rf decrease', 'rf dir', 'rf all',
+                     'man increase', 'man decrease', 'man dir', 'man all']
     elif param == 'wx':
-        bust_types = [f'Difference in significant {W_NAMES[param]}'] * 3
-        taf_types = ['Old First Guess TAFs', 'New First Guess TAFs', 
-                     'Manual TAFs']
-        bust_keys = ['old all', 'new all', 'is all']
+        bust_types = [f'Difference in significant {W_NAMES[param]}'] * 4
+        taf_types = ['Old First Guess TAFs', 'New First Guess TAFs (XGBoost)', 
+                     'New First Guess TAFs (Random Forest)', 'Manual TAFs']
+        bust_keys = ['old all', 'xg all', 'rf all', 'man all']
     else:
         bust_types = [f'Observed {W_NAMES[param]} higher', 
-                      f'Observed {W_NAMES[param]} lower'] * 3
-        taf_types = (['Old First Guess TAFs'] * 2 
-                     + ['New First Guess TAFs'] * 2 + ['Manual TAFs'] * 2)
-        bust_keys = ['old increase', 'old decrease', 'new increase', 
-                     'new decrease', 'is increase', 'is decrease']
+                      f'Observed {W_NAMES[param]} lower', 
+                      f'Total {W_NAMES[param]} busts'] * 4
+        taf_types = (['Old First Guess TAFs'] * 3 
+                     + ['New First Guess TAFs (XGBoost)'] * 3 
+                     + ['New First Guess TAFs (Random Forest)'] * 3
+                     + ['Manual TAFs'] * 3)
+        bust_keys = ['old increase', 'old decrease', 'old all', 
+                     'xg increase', 'xg decrease', 'xg all',
+                     'rf increase', 'rf decrease', 'rf all',
+                     'man increase', 'man decrease', 'man all']
 
     # Add to summary_stats with number of busts to be updated in 
     # following for loop
@@ -794,7 +822,7 @@ def plot_summary(summary_stats):
         ax.bar_label(ind, fontsize=14)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1, 0.9))
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
     ax.set_xlabel('Number of Busts', weight='bold')
     ax.set_ylabel('Bust Type', weight='bold')
 
