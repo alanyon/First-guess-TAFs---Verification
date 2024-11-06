@@ -153,7 +153,7 @@ class CheckTafThread():
                 metar_month = (self.taf_start_time + timedelta(days=1)).month
                 metar_year = (self.taf_start_time + timedelta(days=1)).year
 
-            # Get METAR issue time as python datetime object.
+            # Get METAR issue time as python datetime object
             metar_time = ConstructTimeObject(metar[1][:-1], metar_day,
                                              metar_month, metar_year).METAR()
 

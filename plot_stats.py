@@ -419,9 +419,12 @@ def do_t_tests(sp_stats, param):
         ]
 
         # Remove NaN values
-        old_scores = old_scores[~np.isnan(old_scores)]
-        xg_scores = xg_scores[~np.isnan(xg_scores)]
-        rf_scores = rf_scores[~np.isnan(rf_scores)]
+        filteredscores = [
+            (ols, xgs, rfs) for ols, xgs, rfs 
+            in zip(old_scores, xg_scores, rf_scores) 
+            if not (math.isnan(ols) or math.isnan(xgs) or math.isnan(rfs))
+        ]
+        old_scores, xg_scores, rf_scores = zip(*filteredscores)
 
         # Perform t-tests
         old_xg_t, old_xg_p = stats.ttest_rel(xg_scores, old_scores,

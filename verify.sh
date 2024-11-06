@@ -16,17 +16,17 @@ export ALL_TAFS="EGAA EGAC EGAE EGBB EGBJ EGCC EGCK EGEC EGEO EGFF EGGD \
                  EGGP EGGW EGHC EGHE EGHH EGHI EGHQ EGKA EGKB EGKK EGLF EGLL \
                  EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX EGPA \
                  EGPB EGPC EGPD EGPE EGPF EGPH EGPI EGPK EGPL EGPN EGPO EGPU \
-                 EGSC EGSH EGSS EGSY EGTC EGTE EGTK"
+                 EGSC EGSH EGSS EGSY EGTC EGTE EGTK EGLC"
 export TAF_30HR="EGCC EGLL EGKK EGSS"
 export TAF_24HR="EGAA EGGP EGNT EGPF EGNM EGPD EGPH EGFF EGNX EGBB EGGD \
-                 EGGW EGHQ EGPK"
+                 EGGW EGHQ EGPK EGLC"
 export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGTE EGPO EGNH EGNR EGNC EGHC EGHE EGKA EGKB EGLF EGMC EGMD \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK"
-# export ALL_TAFS="EGKB EGTE EGMC EGPA EGGD EGGW EGPF EGPD"
+# export ALL_TAFS="EGLC"
 # export TAF_30HR=""
-# export TAF_24HR="EGGD EGGW EGPF EGPD"
-# export TAF_9HR="EGKB EGMC EGPA EGTE"
+# export TAF_24HR="EGLC"
+# export TAF_9HR=""
 
 export TAF_TYPES="Old New_xg New_rf Manual"
 export COMBS="olnx olnr nrnx manr manx maol"
@@ -56,7 +56,7 @@ MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
 #     length[$icao]=9
 # done
 
-# # Run TAF analysis for Operational and FirstGuess
+# Run TAF analysis for Operational and FirstGuess
 # for icao in $ALL_TAFS; do
 # duration=${length[$icao]}
 #   for month in $MONTHS; do

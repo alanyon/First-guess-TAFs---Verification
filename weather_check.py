@@ -46,7 +46,7 @@ class weather(object):
         weather_ok = self.wx_check(metar_weather, all_taf_weather,
                                    base_weather)
 
-        return weather_ok, None
+        return weather_ok, 'any'
 
     def wx_check(self, metar_weather, taf_wx, base_weather, ch_tempo=False):
 
