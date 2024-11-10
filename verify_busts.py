@@ -87,8 +87,8 @@ def main(load_data):
     summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
     summary_stats = plot_param(holders, 'vis', summary_stats)
     summary_stats = plot_param(holders, 'cld', summary_stats)
-    # summary_stats = plot_param(holders, 'wind', summary_stats)
-    # summary_stats = plot_param(holders, 'wx', summary_stats)
+    summary_stats = plot_param(holders, 'wind', summary_stats)
+    summary_stats = plot_param(holders, 'wx', summary_stats)
     plot_summary(summary_stats)
 
 
@@ -359,10 +359,10 @@ def get_holders(load_data):
     all_stats = {icao: deepcopy(all_template) for icao in cf.REQ_ICAO_STRS}
     dirs_template = {'N': 0, 'E': 0, 'S': 0, 'W': 0, 'VRB': 0}
     metar_dirs = {icao: deepcopy(dirs_template) for icao in cf.REQ_ICAO_STRS}
-    old_dirs = {icao: {b_type: deepcopy(dirs_template) 
+    imp_dirs = {icao: {b_type: deepcopy(dirs_template) 
                 for b_type in cf.D_TYPES}
                 for icao in cf.REQ_ICAO_STRS}
-    xg_dirs, rf_dirs, man_dirs = (deepcopy(old_dirs) for _ in range(3))
+    man_dirs = deepcopy(imp_dirs)
     metars_used = {icao: 0 for icao in cf.REQ_ICAO_STRS}
     last_day = cf.DAYS[0]
 
@@ -371,9 +371,8 @@ def get_holders(load_data):
         'wind_info': wind_info, 'vis_info': vis_info, 'cld_info': cld_info,
         'wx_info': wx_info, 'all_info': all_info, 'wind_stats': wind_stats,
         'vis_stats': vis_stats, 'cld_stats': cld_stats, 'wx_stats': wx_stats,
-        'all_stats': all_stats, 'metar_dirs': metar_dirs, 'old_dirs': old_dirs,
-        'xg_dirs': xg_dirs, 'rf_dirs': rf_dirs, 'man_dirs': man_dirs,
-        'metars_used': metars_used, 'last_day': last_day}
+        'all_stats': all_stats, 'metar_dirs': metar_dirs, 'imp_dirs': imp_dirs,
+        'man_dirs': man_dirs, 'metars_used': metars_used, 'last_day': last_day}
 
     return holders
 
@@ -437,9 +436,7 @@ def get_new_data(holders, load_data):
         return
 
     # Read in first guess TAFs files
-    old_tafs_lines = get_taf_lines(cf.OLD_TAFS)
-    xg_tafs_lines = get_taf_lines(cf.NEW_XG_TAFS)
-    rf_tafs_lines = get_taf_lines(cf.NEW_RF_TAFS)
+    imp_tafs_lines = get_taf_lines(cf.IMP_TAFS)
 
     # Loop though all days in period
     for day in cf.DAYS:
@@ -455,12 +452,10 @@ def get_new_data(holders, load_data):
         holders['last_day'] = day
 
         # Find all TAFs issued on this day
-        day_old_tafs = get_day_tafs(day, old_tafs_lines)
-        day_xg_tafs = get_day_tafs(day, xg_tafs_lines)
-        day_rf_tafs = get_day_tafs(day, rf_tafs_lines)
+        day_imp_tafs = get_day_tafs(day, imp_tafs_lines)
 
         # If no TAFs found, move to next day
-        if not all([day_old_tafs, day_xg_tafs, day_rf_tafs]):
+        if not all([day_imp_tafs]):
             continue
 
         # Get all TAFs and METARs for day (3 days for METARs to cover
@@ -471,45 +466,31 @@ def get_new_data(holders, load_data):
             print(f'problem retrieving for day: {day}')
             continue
 
-        # Loop through each old TAF, attempt to find equivalent new TAF
-        for o_row, xg_row, rf_row in itertools.product(day_old_tafs,
-                                                       day_xg_tafs,
-                                                       day_rf_tafs):
+        # Loop through each imp TAF, attempt to find equivalent new TAF
+        for imp_row in day_imp_tafs:
 
             # Get required TAF variables
-            old_vdt, old_taf, old_icao = get_row_deets(o_row)
-            xg_vdt, xg_taf, xg_icao = get_row_deets(xg_row)
-            rf_vdt, rf_taf, rf_icao = get_row_deets(rf_row)
-
-            # Continue to next iteration if wrong validity time or icao
-            if not all([old_vdt == xg_vdt == rf_vdt,
-                        old_icao == xg_icao == rf_icao]):
-                continue
-
-            # Now icaos and vdts must be the same
-            icao = old_icao
-            vdt = old_vdt
-            vday = vdt.date()
+            vdt, imp_taf, icao = get_row_deets(imp_row)
 
             # Only need info for required ICAOs
             if icao not in cf.REQ_ICAO_STRS:
                 continue
 
             # Get TAF validity times as python datetime objects
-            taf_day = int(old_taf[2][:2])
-            old_start, old_end = ConstructTimeObject(old_taf[2], taf_day,
+            taf_day = int(imp_taf[2][:2])
+            imp_start, imp_end = ConstructTimeObject(imp_taf[2], taf_day,
                                                      vdt.month, vdt.year).TAF()
 
             # Number of METARs to expect during TAF period
-            num_float = (old_end - old_start).total_seconds() / 1800
+            num_float = (imp_end - imp_start).total_seconds() / 1800
             num_metars = int(np.round(num_float))
 
             # Find TAF with correct timings
             for man_taf in day_man_tafs[icao]:
 
                 # Attempt to match TAFs and get TAFs start/end times
-                start, end, tafs_match = get_taf_times(man_taf, old_taf, vdt,
-                                                       old_start, old_end)
+                start, end, tafs_match = get_taf_times(man_taf, imp_taf, vdt,
+                                                       imp_start, imp_end)
 
                 # Move on if TAFs don't match
                 if not tafs_match:
@@ -521,14 +502,14 @@ def get_new_data(holders, load_data):
 
                 # Count busts for all TAF types
                 all_busts = [count_busts(taf, metars, icao, start, end)
-                             for taf in [old_taf, xg_taf, rf_taf, man_taf]]
+                             for taf in [imp_taf, man_taf]]
 
                 # Move on if bad TAF found
                 if any(busts is None for busts in all_busts):
                     continue
 
                 # Unpack busts
-                old_busts, xg_busts, rf_busts, man_busts = all_busts
+                imp_busts, man_busts = all_busts
 
                 # Get list of METARs used for all TAF types
                 metars_all = get_common_metars(all_busts)
@@ -540,13 +521,12 @@ def get_new_data(holders, load_data):
                 holders['metars_used'][icao] += num_metars
 
                 # Add to all stats dictionaries
-                vc_busts = {'old': old_busts, 'xg': xg_busts, 'rf': rf_busts,
-                            'man': man_busts}
+                vc_busts = {'imp': imp_busts, 'man': man_busts}
                 update_stats(holders, vc_busts, icao)
 
                 # Add to all info dictionaries
-                update_infos(holders, icao, old_taf, old_busts, xg_taf,
-                             xg_busts, rf_taf, rf_busts, man_taf, man_busts)
+                update_infos(holders, icao, imp_taf, imp_busts, man_taf, 
+                             man_busts)
 
                 # Break for loop so only one TAF is used
                 break
@@ -977,31 +957,20 @@ def plot_param(holders, param, summary_stats):
         bust_types = [f'Observed {cf.W_NAMES[param]} higher',
                       f'Observed {cf.W_NAMES[param]} lower',
                       f'Difference in {cf.W_NAMES[param]} direction',
-                      'Total wind busts'] * 4
-        taf_types = (['Old First Guess TAFs'] * 4
-                     + ['New First Guess TAFs (XGBoost)'] * 4
-                     + ['New First Guess TAFs (Random Forest)'] * 4
-                     + ['Manual TAFs'] * 4)
-        bust_keys = ['old increase', 'old decrease', 'old dir', 'old all',
-                     'xg increase', 'xg decrease', 'xg dir', 'old all',
-                     'rf increase', 'rf decrease', 'rf dir', 'rf all',
+                      'Total wind busts'] * 2
+        taf_types = (['First Guess TAFs'] * 4 + ['Manual TAFs'] * 4)
+        bust_keys = ['imp increase', 'imp decrease', 'imp dir', 'imp all',
                      'man increase', 'man decrease', 'man dir', 'man all']
     elif param == 'wx':
-        bust_types = [f'Difference in significant {cf.W_NAMES[param]}'] * 4
-        taf_types = ['Old First Guess TAFs', 'New First Guess TAFs (XGBoost)',
-                     'New First Guess TAFs (Random Forest)', 'Manual TAFs']
-        bust_keys = ['old all', 'xg all', 'rf all', 'man all']
+        bust_types = [f'Difference in significant {cf.W_NAMES[param]}'] * 2
+        taf_types = ['First Guess TAFs', 'Manual TAFs']
+        bust_keys = ['imp all', 'man all']
     else:
         bust_types = [f'Observed {cf.W_NAMES[param]} higher',
                       f'Observed {cf.W_NAMES[param]} lower',
-                      f'Total {cf.W_NAMES[param]} busts'] * 4
-        taf_types = (['Old First Guess TAFs'] * 3
-                     + ['New First Guess TAFs (XGBoost)'] * 3
-                     + ['New First Guess TAFs (Random Forest)'] * 3
-                     + ['Manual TAFs'] * 3)
-        bust_keys = ['old increase', 'old decrease', 'old all',
-                     'xg increase', 'xg decrease', 'xg all',
-                     'rf increase', 'rf decrease', 'rf all',
+                      f'Total {cf.W_NAMES[param]} busts'] * 2
+        taf_types = (['First Guess TAFs'] * 3 + ['Manual TAFs'] * 3)
+        bust_keys = ['imp increase', 'imp decrease', 'imp all',
                      'man increase', 'man decrease', 'man all']
 
     # Add to summary_stats with number of busts to be updated in
@@ -1045,7 +1014,9 @@ def plot_param(holders, param, summary_stats):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/ml_plots/{icao}/{param}_busts.png'
+        if not os.path.exists(f'{cf.D_DIR}/bust_plots/{icao}'):
+            os.makedirs(f'{cf.D_DIR}/bust_plots/{icao}')
+        img_fname = f'{cf.D_DIR}/bust_plots/{icao}/{param}_busts.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -1081,7 +1052,7 @@ def plot_summary(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/ml_plots/summary_busts.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/summary_busts.png')
     plt.close()
 
 
@@ -1113,20 +1084,17 @@ def taf_str(taf_lst):
     return stringy_taf, num_lines
 
 
-def update_infos(holders, icao, old_taf, old_busts, xg_taf, xg_busts, rf_taf,
-                 rf_busts, man_taf, man_busts):
+def update_infos(holders, icao, imp_taf, imp_busts, man_taf, man_busts):
     """
     Updates bust information dictionaries.
 
     Args:
         holders (dict): Dictionaries to store data
         icao (str): ICAO of TAFs
-        old_taf (list): Old TAF details
-        old_busts (dict): Old TAF bust information
-        xg_taf (list): New TAF details
-        xg_busts (dict): New TAF bust information
-        rf_taf (list): New TAF details
-        rf_busts (dict): New TAF bust information
+        imp_taf (list): IMPROVER TAF details
+        imp_busts (dict): IMPROVER TAF bust information
+        man_taf (list): Manual TAF details
+        man_busts (dict): Manual TAF bust information
     Returns:
         None
     """
@@ -1134,13 +1102,11 @@ def update_infos(holders, icao, old_taf, old_busts, xg_taf, xg_busts, rf_taf,
     for w_type, w_lng in cf.W_NAMES.items():
 
         # Don't bother appending info if no busts
-        if not any([old_busts[w_lng], xg_busts[w_lng],
-                    rf_busts[w_lng], man_busts[w_lng]]):
+        if not any([imp_busts[w_lng], man_busts[w_lng]]):
             continue
 
         # Otherwise, append info
-        w_info = [old_taf, old_busts[w_lng], xg_taf, xg_busts[w_lng], rf_taf, 
-                  rf_busts[w_lng], man_taf, man_busts[w_lng]]
+        w_info = [imp_taf, imp_busts[w_lng], man_taf, man_busts[w_lng]]
         holders[f'{w_type}_info'][icao].append(w_info)
 
 
@@ -1250,15 +1216,9 @@ def write_to_excel(holders, w_type):
         i_stats = w_stats[icao]
 
         # Headers
-        worksheet.write(row_num, 0, 'Old First Guess TAFs Statistics',
+        worksheet.write(row_num, 0, 'First Guess TAFs Statistics',
                         big_bold)
-        worksheet.write(row_num, 12, 
-                        'New First Guess TAFs (XGBoost) Statistcs',
-                        big_bold)
-        worksheet.write(row_num, 24, 
-                        'New First Guess TAFs (Random Forest) Statistcs',
-                        big_bold)
-        worksheet.write(row_num, 36, 'Manual TAFs Statistcs', big_bold)
+        worksheet.write(row_num, 12, 'Manual TAFs Statistcs', big_bold)
 
         # Write stats to spreadsheet
         for msg, key in zip(msgs, keys):
@@ -1269,39 +1229,28 @@ def write_to_excel(holders, w_type):
         for item in w_info[icao]:
 
             # Unpack list
-            (old_taf, old_ver, xg_taf, xg_ver, 
-             rf_taf, rf_ver, man_taf, man_ver) = item
+            (imp_taf, imp_ver, man_taf, man_ver) = item
 
             # Headers
-            worksheet.write(row_num, 0, 'Old First Guess TAF', big_bold)
-            worksheet.write(row_num, 12, 'New First Guess TAF (XGBoost)', 
-                            big_bold)
-            worksheet.write(row_num, 24, 'New First Guess TAF (Random Forest)', 
-                            big_bold)
-            worksheet.write(row_num, 36, 'Manual TAF', big_bold)
+            worksheet.write(row_num, 0, 'First Guess TAF', big_bold)
+            worksheet.write(row_num, 12, 'Manual TAF', big_bold)
             row_num += 1
 
             # Add line breaks to TAFs and change to strings
-            old_str, old_lines = taf_str(old_taf)
-            xg_str, xg_lines = taf_str(xg_taf)
-            rf_str, rf_lines = taf_str(rf_taf)
+            imp_str, imp_lines = taf_str(imp_taf)
             man_str, man_lines = taf_str(man_taf)
 
             # Write TAFs to spreadsheet
-            worksheet.merge_range(row_num, 0, row_num + old_lines, 6, old_str,
+            worksheet.merge_range(row_num, 0, row_num + imp_lines, 6, imp_str,
                                   taf_format)
-            worksheet.merge_range(row_num, 12, row_num + xg_lines, 18,
-                                  xg_str, taf_format)
-            worksheet.merge_range(row_num, 24, row_num + xg_lines, 30,
-                                  xg_str, taf_format)
-            worksheet.merge_range(row_num, 36, row_num + man_lines, 42,
+            worksheet.merge_range(row_num, 12, row_num + man_lines, 18,
                                   man_str, taf_format)
 
             # Add to row number
-            row_num += max([old_lines, xg_lines, rf_lines, man_lines]) + 2
+            row_num += max([imp_lines, man_lines]) + 2
 
             # Busts header
-            for col in [0, 12, 24, 36]:
+            for col in [0, 12]:
                 worksheet.write(row_num, col, 'TAF Busts', big_bold)
 
             # Add to row number
@@ -1309,24 +1258,20 @@ def write_to_excel(holders, w_type):
 
             # Write in METARs
             if w_type == 'wind':
-                old_lines = mets_wind(old_ver, worksheet, workbook, row_num, 0)
-                xg_lines = mets_wind(xg_ver, worksheet, workbook, row_num, 12)
-                rf_lines = mets_wind(rf_ver, worksheet, workbook, row_num, 24)
-                man_lines = mets_wind(man_ver, worksheet, workbook, row_num, 36)
+                imp_lines = mets_wind(imp_ver, worksheet, workbook, row_num, 0)
+                man_lines = mets_wind(man_ver, worksheet, workbook, row_num, 12)
             else:
-                old_lines = mets_all(old_ver, worksheet, workbook, row_num, 0)
-                xg_lines = mets_all(xg_ver, worksheet, workbook, row_num, 12)
-                rf_lines = mets_all(rf_ver, worksheet, workbook, row_num, 24)
-                man_lines = mets_all(man_ver, worksheet, workbook, row_num, 24)
+                imp_lines = mets_all(imp_ver, worksheet, workbook, row_num, 0)
+                man_lines = mets_all(man_ver, worksheet, workbook, row_num, 12)
 
             # Add to row number
-            row_num += max([old_lines, xg_lines, rf_lines, man_lines]) + 1
+            row_num += max([imp_lines, man_lines]) + 1
 
     # Close workbook
     workbook.close()
 
     # Copy Excel file to ml_plots directory
-    os.system(f'mv {fname} {cf.D_DIR}/ml_plots')
+    os.system(f'mv {fname} {cf.D_DIR}/bust_plots')
 
 
 def write_stats(worksheet, fmt, stats_dict, msg, key_stat, r_num):
@@ -1344,18 +1289,12 @@ def write_stats(worksheet, fmt, stats_dict, msg, key_stat, r_num):
         r_num (int): Updated row number
     """
     r_num += 1
-    old_stat = stats_dict[f'old {key_stat}']
-    old_str = f'{msg} busts: {old_stat}'
-    worksheet.write(r_num, 0, old_str, fmt)
-    xg_stat = stats_dict[f'xg {key_stat}']
-    xg_str = f'{msg} busts: {xg_stat}'
-    worksheet.write(r_num, 12, xg_str, fmt)
-    rf_stat = stats_dict[f'rf {key_stat}']
-    rf_str = f'{msg} busts: {rf_stat}'
-    worksheet.write(r_num, 24, rf_str, fmt)
+    imp_stat = stats_dict[f'imp {key_stat}']
+    imp_str = f'{msg} busts: {imp_stat}'
+    worksheet.write(r_num, 0, imp_str, fmt)
     man_stat = stats_dict[f'man {key_stat}']
     man_str = f'{msg} busts: {man_stat}'
-    worksheet.write(r_num, 36, man_str, fmt)
+    worksheet.write(r_num, 12, man_str, fmt)
 
     return r_num
 

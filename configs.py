@@ -5,14 +5,12 @@ from datetime import datetime
 from dateutil.rrule import DAILY, rrule
 
 # Accepted first guess TAFs
-D_DIR = '/data/users/alanyon/tafs/improver/verification/20230805-20241004_ml'
-OLD_TAFS = f'{D_DIR}/decodes/Output_old/acceptedTafs.csv'
-NEW_XG_TAFS = f'{D_DIR}/decodes/Output_new_xg/acceptedTafs.csv'
-NEW_RF_TAFS = f'{D_DIR}/decodes/Output_new_rf/acceptedTafs.csv'
+D_DIR = '/data/users/alanyon/tafs/verification/imp_vs_bd_20230804-20240804'
+IMP_TAFS = f'{D_DIR}/decodes/Output_im/acceptedTafs.csv'
 
 # Start and end dates for verification period
-START_DT = datetime(2023, 8, 5)
-END_DT = datetime(2024, 10, 5)
+START_DT = datetime(2023, 8, 4)
+END_DT = datetime(2024, 8, 5)
 
 # Days in verification period
 DAYS = list(rrule(DAILY, interval=1, dtstart=START_DT, until=END_DT))
@@ -34,8 +32,7 @@ DIRS = ['N', 'E', 'S', 'W', 'VRB']
 # String names of lists and dictionaries used to collect data
 NAMES = ['wind_info', 'vis_info', 'cld_info', 'wx_info', 'all_info', 
          'wind_stats', 'vis_stats', 'cld_stats', 'wx_stats', 'all_stats', 
-         'metar_dirs', 'old_dirs', 'xg_dirs', 'rf_dirs', 'man_dirs', 
-         'metars_used', 'last_day']
+         'metar_dirs', 'imp_dirs', 'man_dirs', 'metars_used', 'last_day']
 
 # Dictionaries mapping short weather names to long names
 W_NAMES = {'vis': 'visibility', 'wind': 'wind', 'wx': 'weather',
@@ -70,8 +67,7 @@ REQ_ICAO_STRS = {
 # REQ_ICAO_STRS = {'EGLL': 'Heathrow'}
 
 # TAF type names and abbrieviations
-TAF_TYPES = {'xg': 'New XGBoost', 'rf': 'New Random Forest', 'old': 'Old', 
-             'man': 'Manual'}
+TAF_TYPES = {'imp': 'IMPROVER', 'man': 'Manual'}
 B_TYPES = ['increase', 'decrease', 'both', 'all']
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']
 D_TYPES = ['increase', 'decrease', 'dir']
