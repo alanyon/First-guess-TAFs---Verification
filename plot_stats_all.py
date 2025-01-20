@@ -37,6 +37,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from scipy import stats
+import configs as cf
 
 # Set plotting style
 sns.set_style('darkgrid')
@@ -54,14 +55,10 @@ END = os.environ['VERIF_END']
 
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
-TAF_TYPES = {'ol': 'Old', 'ma': 'Manual', 'nx': 'New_xg', 'nr': 'New_rf'}
+TAF_TYPES = {'fg': 'FirstGuessAll', 'ma': 'ManualAll'}
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
-TAF_TYPES_PLOT = {'ol': 'Old First Guess TAFs',
-                  'nx': 'New First Guess TAFs\n(XGBoost)',
-                  'nr': 'New First Guess TAFs\n(Random Forest)',
-                  'ma': 'Manual TAFs'}
-TAF_TYPES_LABELS = {'ol': 'Old', 'ma': 'Manual', 'nx': 'New XGBoost',
-                    'nr': 'New Random Forest'}
+TAF_TYPES_PLOT = {'fg': 'First Guess TAFs', 'ma': 'Manual TAFs'}
+TAF_TYPES_LABELS = {'fg': 'First Guess', 'ma': 'Manual'}
 NUM_CATS = {'vis': 6, 'clb': 5}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {'clb_9': 0.517, 'clb_24': 0.468, 'clb_30': 0.457, 'vis_9': 0.426,
@@ -88,38 +85,52 @@ def main(req_obs, unc):
     # Get dictionary mapping ICAOs to airport names
     icao_dict = get_icao_dict()
 
+    # Replace spaces in airport names with new lines
+    icao_dict = {icao: name.replace(' ', '\n') 
+                 for icao, name in icao_dict.items()}
+
     # Get random set of colours to assign to the airports
     color_dict = get_color_dict()
 
-    # For collecting all stats
-    all_stats = {}
+    # # For collecting all stats
+    # all_stats = {}
+
+    # Define figure and axes
+    fig, axs = plt.subplots(2, 1, figsize=(7, 12))
 
     # Get stats from csv files
-    for param in PARAMS:
+    for param, ax in zip(PARAMS, axs.flatten()):
 
         # Empty lists to append stats to
         stats_dict = get_stats(param, unc, req_obs)
 
-        sp_stats = sp_box_plot(stats_dict, param)
+        # sp_stats = sp_box_plot(stats_dict, param)
 
         # Determine if changes are statistically significant
-        do_t_tests(sp_stats, param)
+        # do_t_tests(sp_stats, param)
 
-        rel_freq_plot(param, stats_dict)
+        # rel_freq_plot(param, stats_dict)
 
-        all_stats[param] = stats_dict
+        # all_stats[param] = stats_dict
 
         # Make plots for all combinations of TAF types
         for comb in COMBS:
 
             # Scatter plots showing Gerrity scores for all airports
-            make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
+            make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict, 
+                      ax)
 
-    # Create Gerrity score box plots
-    g_stats = g_box_plot(all_stats)
+    # Save and close figure
+    fname = (f'{STATS_DIR}/scatter_plots/gerrity_scatter.png')
+    plt.subplots_adjust(hspace=0.4)
+    fig.savefig(fname, bbox_inches='tight')
+    plt.close()
 
-    # Determine if changes are statistically significant
-    do_g_t_tests(g_stats)
+    # # Create Gerrity score box plots
+    # g_stats = g_box_plot(all_stats)
+
+    # # Determine if changes are statistically significant
+    # do_g_t_tests(g_stats)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -185,14 +196,14 @@ def add_detail(ax, lim_min, lim_max, lim_diff, comb):
     ax.fill_between(lims, lims, lim_max, color='green', alpha=0.05)
 
     # Positions for extra text
-    positions = [.05, .85, .68, .05]
+    positions = [.05, .9, .55, .05]
     fgx, fgy, isx, isy = [lim_min + pos * lim_diff for pos in positions]
 
     # Add extra text
-    ax.text(fgx, fgy, f'{TAF_TYPES_LABELS[comb[2:]]} TAF\nScores Higher',
-            c='green', fontsize=15)
-    ax.text(isx, isy, f'{TAF_TYPES_LABELS[comb[:2]]} TAF\nScores Higher',
-            c='red', fontsize=15)
+    ax.text(fgx, fgy, f'{TAF_TYPES_LABELS[comb[2:]]} TAFs Better',
+            c='green', fontsize=18)
+    ax.text(isx, isy, f'{TAF_TYPES_LABELS[comb[:2]]} TAFs Better',
+            c='red', fontsize=18)
 
     return ax
 
@@ -329,9 +340,9 @@ def calc_min_obs(s_str, e_str):
     sdt, edt = [datetime.strptime(d_str, '%Y%m%d') for d_str in [s_str, e_str]]
 
     # Get number of days between start and end of verification period
-    vdays = (edt - sdt).days * 0.2
+    vdays = (edt - sdt).days
 
-    # Average of 2 TAFs per day required (2 obs per hour expected)
+    # Average of 1 TAFs per day required (2 obs per hour expected)
     min_obs_30hr =  2 * 2 * 30 * vdays
     min_obs_24hr =  2 * 2 * 24 * vdays
     min_obs_9hr =  2 * 2 * 9 * vdays
@@ -645,6 +656,9 @@ def extract_data(stats_dict, key_1, key_2, cat, param):
     # Only include stats with no nans
     stats_df = stats_df.dropna()
 
+    # Only include stats for required airports
+    stats_df = stats_df[stats_df['airports'].isin(cf.REQ_ICAO_STRS)]
+
     # Get values out of dataframe and return
     return [stats_df[col] for col in ['airports', 'stats_1', 'stats_2']]
 
@@ -765,7 +779,7 @@ def get_stats(param, unc, req_obs):
                 # Check that airport has sufficient data (should be same
                 # number of obs in both types of TAF so only need to
                 # check one)
-                if f_key == 'ol':
+                if f_key == 'fg':
                     stats_dict = check_obs(stats_dict, row, req_obs)
 
     # Remove airports with insufficient data
@@ -823,7 +837,7 @@ def get_strings(score, param, length, cat, unc, comb):
     return title, fname, key_1, key_2
 
 
-def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
+def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict, ax,
               length='', cat=''):
     """
     Creates a scatter plot.
@@ -845,15 +859,15 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
     title, fname, key_1, key_2 = get_strings(score, param, length, cat, unc,
                                              comb)
 
+    # OVERRIDING TITLE
+    title = f'{PARAMS[param]}'
+
     # Extract data from stats dictionary
     airports, stats_1, stats_2 = extract_data(stats_dict, key_1, key_2, cat,
                                               param)
 
     # Set axes limits for plots
     lim_min, lim_max, lim_diff = set_lims(stats_1, stats_2)
-
-    # Define figure and axes
-    fig, ax = plt.subplots()
 
     # Set axes limits
     ax.set_xlim(lim_min, lim_max)
@@ -875,17 +889,15 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
                    edgecolor='black', linewidth=1)
 
     # Set titles, legend, etc
-    ax.set_title(title, fontsize=20, weight='bold')
-    ax.set_xlabel(f'Scores Based on {TAF_TYPES_LABELS[comb[:2]]} TAFs',
-                  fontsize=14)
-    ax.set_ylabel(f'Scores Based on {TAF_TYPES_LABELS[comb[2:]]} TAFs',
-                  fontsize=14)
-    ax.legend(loc='upper center', ncol=2, fontsize=12,
-              bbox_to_anchor=(1.45, 1.0))
-
-    # Save and close figure
-    fig.savefig(fname, bbox_inches='tight')
-    plt.close()
+    ax.set_title(title, fontsize=25, weight='bold')
+    ax.set_xlabel(f'Sharpe GSS in {TAF_TYPES_LABELS[comb[:2]]} TAFs',
+                  fontsize=18, weight='bold')
+    ax.set_ylabel(f'Sharpe GSS in {TAF_TYPES_LABELS[comb[2:]]} TAFs',
+                  fontsize=18, weight='bold')
+    if param == 'vis':
+        ax.legend(loc='upper center', ncol=1, fontsize=15, title='Airport',
+                  title_fontproperties={'weight':'bold', 'size':18}, 
+                  bbox_to_anchor=(1.2, 1.02))
 
 
 def rel_freq_plot(param, stats_dict):
@@ -952,28 +964,22 @@ def rel_freq_plot(param, stats_dict):
                 plot_stats['Type'].append('Observed')
                 plot_stats['TAF Category'].append(cat)
 
-    # Just plot obs freqs
-    plot_stats = pd.DataFrame(plot_stats)
-    plot_stats = plot_stats[plot_stats['Type'] == 'Observed']
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
 
     # Create bar plots
-    # hue_order = [f'{t_type} forecast' for t_type in TAF_TYPES.values()]
-    # hue_order.append('Observed')
-    # rf_bar = sns.barplot(plot_stats, x='TAF Category', y='Relative Frequency',
-    #                      hue='Type', hue_order=hue_order)
-    rf_bar = sns.barplot(plot_stats, x='TAF Category', y='Relative Frequency')
+    hue_order = [f'{t_type} forecast' for t_type in TAF_TYPES.values()]
+    hue_order.append('Observed')
+    rf_bar = sns.barplot(plot_stats, x='TAF Category', y='Relative Frequency',
+                         hue='Type', hue_order=hue_order)
+
     # Formatting, etc
-    ax.set_title(f'{PARAMS[param]} Observed Category Frequencies', 
-                 weight='bold', fontsize=20)
+    ax.set_title(PARAMS[param])
     ax.tick_params(axis='x', labelsize=15)
-    ax.set_xlabel('TAF Category', weight='bold', fontsize=15)
-    ax.set_ylabel('Relative Frequency', weight='bold', fontsize=15)
-    # sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
     ax.set_yscale('log')
-    # plt.setp(rf_bar.get_legend().get_title(), weight='bold')
+    plt.setp(rf_bar.get_legend().get_title(), weight='bold')
 
     # Save and close figure
     plt.tight_layout()
@@ -1049,9 +1055,6 @@ def sp_box_plot(stats_dict, param):
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
 
-    # Remove rows with XGBoost
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('XGBoost')]
-
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -1065,7 +1068,7 @@ def sp_box_plot(stats_dict, param):
 
     # Formatting, etc
     ax.set_title(f'{PARAMS[param]} Peirce Skill Scores', weight='bold')
-    ax.set_xlabel('TAF Category', weight='bold')
+    ax.set_xlabel('Category', weight='bold')
     ax.set_ylabel('Peirce Skill Score', weight='bold')
     ax.tick_params(axis='x', labelsize=15)
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
@@ -1097,7 +1100,7 @@ def g_box_plot(all_stats):
     # For collecting stats
     t_stats = {'vis': {t_type: [] for t_type in TAF_TYPES_PLOT.values()},
                'clb': {t_type: [] for t_type in TAF_TYPES_PLOT.values()}}
-    p_stats = {'Sharpe GSS': [], 'Parameter': [], 'TAF Type': []}
+    p_stats = {'Gerrity Skill Score': [], 'Parameter': [], 'TAF Type': []}
 
     # Loop through parameters
     for param in PARAMS:
@@ -1119,29 +1122,26 @@ def g_box_plot(all_stats):
             # Loop though TAF types and add to dictionaries
             for t_name, g_score in g_scores.items():
                 t_stats[param][t_name].append(g_score)
-                p_stats['Sharpe GSS'].append(g_score)
+                p_stats['Gerrity Skill Score'].append(g_score)
                 p_stats['Parameter'].append(PARAMS[param])
                 p_stats['TAF Type'].append(t_name)
 
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
 
-    # Remove rows with XGBoost
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('XGBoost')]
-
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Create box plot
     g_box = sns.boxplot(data=plot_stats, x='Parameter', 
-                        y='Sharpe GSS', hue='TAF Type', ax=ax)
+                        y='Gerrity Skill Score', hue='TAF Type', ax=ax)
 
     # Add vertical line separating parameter
     ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
 
     # Formatting, etc
     ax.set_xlabel('Parameter', weight='bold')
-    ax.set_ylabel('Sharpe GSS', weight='bold')
+    ax.set_ylabel('Gerrity Skill Score', weight='bold')
     ax.tick_params(axis='x', labelsize=15)
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
     plt.setp(g_box.get_legend().get_title(), weight='bold')

@@ -26,8 +26,8 @@ export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
 # export TAF_24HR="EGLC"
 # export TAF_9HR=""
 
-export TAF_TYPES="Old New_xg New_rf Manual"
-export COMBS="olnx olnr nrnx manr manx maol"
+export TAF_TYPES="Old New_rf Manual"
+export COMBS="olnr manr maol"
 export VERIF_START=20230805
 export VERIF_END=20241005
 MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
