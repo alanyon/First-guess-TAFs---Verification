@@ -3,7 +3,7 @@
 module unload scitools
 conda activate default_clone
 
-ver_dates=20230805-20241004_ml
+ver_dates=20230805-20241225_ml
 datadir=/data/users/alanyon/tafs/improver/verification/${ver_dates}
 decode_dir=${datadir}/decodes
 

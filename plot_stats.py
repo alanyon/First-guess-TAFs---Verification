@@ -53,7 +53,7 @@ START = os.environ['VERIF_START']
 END = os.environ['VERIF_END']
 
 # Define other constants
-PARAMS = {'vis': 'Visibility', 'clb': 'Cloud base'}
+PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES = {'ol': 'Old', 'ma': 'Manual', 'nx': 'New_xg', 'nr': 'New_rf'}
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
 TAF_TYPES_PLOT = {'ol': 'Old First Guess TAFs',
@@ -114,19 +114,12 @@ def main(req_obs, unc):
 
             # Scatter plots showing Gerrity scores for all airports
             make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
-            # make_plot(param, color_dict, stats_dict, 'bp', unc, comb, icao_dict)
-            # make_plot(param, color_dict, stats_dict, 'sp', unc, comb,
-            #           icao_dict, cat='all')
 
-        #     # Make scatter plot showing TAF length specific Gerrity scores
-        #     for length in [9, 24, 30]:
-        #         make_plot(param, color_dict, stats_dict, 'g', unc, comb,
-        #                   icao_dict, length=length)
+    # Create Gerrity score box plots
+    g_stats = g_box_plot(all_stats)
 
-        #     # Make scatter plots showing Peirce scores
-        #     for cat in range(1, NUM_CATS[param] + 1):
-        #         make_plot(param, color_dict, stats_dict, 'sp', unc, comb,
-        #                   icao_dict, cat=cat)
+    # Determine if changes are statistically significant
+    do_g_t_tests(g_stats)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -338,10 +331,10 @@ def calc_min_obs(s_str, e_str):
     # Get number of days between start and end of verification period
     vdays = (edt - sdt).days * 0.2
 
-    # Average of 1 TAFs per day required (2 obs per hour expected)
-    min_obs_30hr =  1 * 2 * 30 * vdays
-    min_obs_24hr =  1 * 2 * 24 * vdays
-    min_obs_9hr =  1 * 2 * 9 * vdays
+    # Average of 2 TAFs per day required (2 obs per hour expected)
+    min_obs_30hr =  2 * 2 * 30 * vdays
+    min_obs_24hr =  2 * 2 * 24 * vdays
+    min_obs_9hr =  2 * 2 * 9 * vdays
 
     # # TESTING ===================================
     # min_obs_30hr =  0
@@ -410,21 +403,12 @@ def do_t_tests(sp_stats, param):
     # Loop through each TAF category, collecting scores
     for cat in range(1, NUM_CATS[param] + 1):
 
-        # Get Peirce Skill scores for category for old, XGBoost and
+        # Get Peirce Skill Scores for category for old, XGBoost and
         # Random Forest TAFs
-        cat_stats = sp_stats[sp_stats['Category'] == cat]
+        cat_stats = sp_stats[cat]
         old_scores, xg_scores, rf_scores, _ = [
-            cat_stats[cat_stats['TAF Type'] == t_type]['Peirce Skill Score']
-            for t_type in TAF_TYPES_PLOT.values()
+            cat_stats[t_type] for t_type in TAF_TYPES_PLOT.values()
         ]
-
-        # Remove NaN values
-        filteredscores = [
-            (ols, xgs, rfs) for ols, xgs, rfs 
-            in zip(old_scores, xg_scores, rf_scores) 
-            if not (math.isnan(ols) or math.isnan(xgs) or math.isnan(rfs))
-        ]
-        old_scores, xg_scores, rf_scores = zip(*filteredscores)
 
         # Perform t-tests
         old_xg_t, old_xg_p = stats.ttest_rel(xg_scores, old_scores,
@@ -451,12 +435,12 @@ def do_t_tests(sp_stats, param):
 
     # Normalize the T-statistics for color coding (use absolute values
     # to highlight extremes)
-    max_t_stat_xg = max(abs(stats_df['XGBoost T-Statistic']))
-    max_t_stat_rf = max(abs(stats_df['Random Forest T-Statistic']))
+    max_t_stat = max(abs(stats_df['XGBoost T-Statistic']).max(),
+                     abs(stats_df['Random Forest T-Statistic']).max())
     norm_df['XGBoost T-Statistic'] = (stats_df['XGBoost T-Statistic'] /
-                                      max_t_stat_xg)
+                                      max_t_stat)
     norm_df['Random Forest T-Statistic'] = (
-        stats_df['Random Forest T-Statistic'] / max_t_stat_rf
+        stats_df['Random Forest T-Statistic'] / max_t_stat
     )
 
     # Normalize the P-values around 0.05 for color coding
@@ -506,6 +490,120 @@ def do_t_tests(sp_stats, param):
     # Save and close figure
     fig.savefig(f'{STATS_DIR}/sp_plots/{param}_t_tests.png',
                 bbox_inches='tight')
+    plt.close()
+
+
+def do_g_t_tests(g_stats):
+    """
+    Performs t-tests to determine if differences in Peirce Skill Scores,
+    plotting results in a heatmap style table.
+
+    Args:
+        sp_stats (pd.DataFrame): DataFrame with Peirce Skill Scores
+        param (str): Parameter being verified
+    Returns:
+        None
+    """
+    # Dictionary to store t-test results
+    gt_stats = {'Parameter': [], 'XGBoost T-Statistic': [],
+                'XGBoost P-Value': [], 'Random Forest T-Statistic': [],
+                'Random Forest P-Value': []}
+
+    # Loop through each parameter, collecting scores
+    for param, param_name in PARAMS.items():
+
+        # Get Gerrity Skill scores old, XGBoost and Random Forest TAFs
+        p_stats = g_stats[param]
+
+        old_scores, xg_scores, rf_scores, _ = [
+            p_stats[t_type] for t_type in TAF_TYPES_PLOT.values()
+        ]
+
+        # Print paired differences between old_scores and xg_scores
+        old_xg_diffs = np.array(xg_scores) - np.array(old_scores)
+        mean_diff = np.mean(old_xg_diffs)
+        std_diff = np.std(old_xg_diffs, ddof=1)
+        t_stat = mean_diff / (std_diff / np.sqrt(len(old_xg_diffs)))
+
+        # Perform t-tests
+        old_xg_t, old_xg_p = stats.ttest_rel(xg_scores, old_scores,
+                                             alternative='greater')
+        old_rf_t, old_rf_p = stats.ttest_rel(rf_scores, old_scores,
+                                             alternative='greater')
+
+        # Add to stats dictionary
+        gt_stats['Parameter'].append(param_name)
+        gt_stats['XGBoost T-Statistic'].append(old_xg_t)
+        gt_stats['XGBoost P-Value'].append(old_xg_p)
+        gt_stats['Random Forest T-Statistic'].append(old_rf_t)
+        gt_stats['Random Forest P-Value'].append(old_rf_p)
+
+    # Create dataframe from stats
+    stats_df = pd.DataFrame(gt_stats)
+
+    # Set the Category column as the index so we can display it nicely
+    stats_df.set_index('Parameter', inplace=True)
+
+    # Create a new DataFrame where the P-values and T-statistics will be
+    # normalized - to be used to create a color-coded heatmap
+    norm_df = stats_df.copy()
+
+    # Normalize the T-statistics for color coding (use absolute values
+    # to highlight extremes)
+    # Get max value for T-statistics
+    max_t_stat = max(abs(stats_df['XGBoost T-Statistic']).max(),
+                     abs(stats_df['Random Forest T-Statistic']).max())
+    norm_df['XGBoost T-Statistic'] = (stats_df['XGBoost T-Statistic'] /
+                                      max_t_stat)
+    norm_df['Random Forest T-Statistic'] = (
+        stats_df['Random Forest T-Statistic'] / max_t_stat
+    )
+
+    # Normalize the P-values around 0.05 for color coding
+    norm_df['XGBoost P-Value'] = np.where(
+        stats_df['XGBoost P-Value'] < 0.05,
+        1 - stats_df['XGBoost P-Value'] / 0.05,
+        -(stats_df['XGBoost P-Value'] - 0.05) / (1 - 0.05))
+    norm_df['Random Forest P-Value'] = np.where(
+        stats_df['Random Forest P-Value'] < 0.05,
+        1 - stats_df['Random Forest P-Value'] / 0.05,
+        -(stats_df['Random Forest P-Value'] - 0.05) / (1 - 0.05))
+
+    # Create a custom colormap (red to green)
+    clrs = [(0.8, 0.2, 0.2), (1, 0, 0), (0.95, 0.95, 0.95), (0.6, 1, 0.6),
+            (0, 0.5, 0)]
+    custom_cmap = LinearSegmentedColormap.from_list('custom_red_green', clrs)
+
+    # Apply TwoSlopeNorm with sharp transition close to the threshold
+    # log_norm = TwoSlopeNorm(vmin=-1, vcenter=0.1, vmax=1)
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(14, 2))
+
+    # Create heatmap with color-coded P-values and T-statistics
+    sns.heatmap(norm_df, annot=stats_df, cmap=custom_cmap, center=0,
+                fmt='.5f', linewidths=0.5, cbar=False)
+
+    # Edit axes labels
+    labels = ax.get_xticklabels()
+    for label in labels:
+        # Insert \n before T- and P-
+        label.set_text(label.get_text().replace(' T-',
+                                                '\nT-').replace(' P-', '\nP-'))
+    ax.set_xticklabels(labels, fontsize=20)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=20)
+
+    # Remove x ticks but not labels
+    ax.tick_params(axis='x', length=0)
+
+    # Format the plot
+    ax.set_ylabel('')
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=0)
+    ax.xaxis.tick_top()
+
+    # Save and close figure
+    fig.savefig(f'{STATS_DIR}/g_plots/t_tests.png', bbox_inches='tight')
     plt.close()
 
 
@@ -917,22 +1015,30 @@ def sp_box_plot(stats_dict, param):
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # For collecting stats
+    t_stats = {cat: {t_type: [] for t_type in TAF_TYPES_PLOT.values()}
+               for cat in range(1, NUM_CATS[param] + 1)}
     p_stats = {'Peirce Skill Score': [], 'Category': [], 'TAF Type': []}
 
-    # Loop though TAF types (BestData, IMPROVER, manual)
-    for taf_type, t_name in TAF_TYPES_PLOT.items():
+    # Loop through each airport
+    for icao in stats_dict:
 
         # Loop through TAF categories
         for cat in range(1, NUM_CATS[param] + 1):
 
-            # Get all Peirce Skill Scores for category
-            cat_sp_scores = [stats_dict[icao][f'sp_{taf_type}_{cat}']
-                             for icao in stats_dict]
+            # Get scores for all TAF types
+            sp_scores = {t_name: stats_dict[icao][f'sp_{taf_type}_{cat}'] 
+                         for taf_type, t_name in TAF_TYPES_PLOT.items()}
 
-            # Add to plot stats
-            p_stats['Peirce Skill Score'] += cat_sp_scores
-            p_stats['Category'] += [cat] * len(cat_sp_scores)
-            p_stats['TAF Type'] += [t_name] * len(cat_sp_scores)
+            # Continue to next category if any scores are NaN
+            if any([math.isnan(score) for score in sp_scores.values()]):
+                continue
+
+            # Loop though TAF types and add to dictionaries
+            for t_name, sp_score in sp_scores.items():
+                t_stats[cat][t_name].append(sp_score)
+                p_stats['Peirce Skill Score'].append(sp_score)
+                p_stats['Category'].append(cat)
+                p_stats['TAF Type'].append(t_name)
 
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
@@ -961,7 +1067,79 @@ def sp_box_plot(stats_dict, param):
     fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot.png')
     plt.close()
 
-    return plot_stats
+    return t_stats
+
+
+def g_box_plot(all_stats):
+    """
+    Creates box plot showing Peirce Skill Scores for each TAF category
+    for each airport.
+
+    Args:
+        stats_dict (dict): Dictionary of stats
+        param (str): Parameter to verify
+    Returns:
+        plot_stats (pd.DataFrame): DataFrame of Peirce Skill Scores for
+                                   each category
+    """
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # For collecting stats
+    t_stats = {'vis': {t_type: [] for t_type in TAF_TYPES_PLOT.values()},
+               'clb': {t_type: [] for t_type in TAF_TYPES_PLOT.values()}}
+    p_stats = {'Sharpe GSS': [], 'Parameter': [], 'TAF Type': []}
+
+    # Loop through parameters
+    for param in PARAMS:
+
+        # Get parameter stats dict
+        stats_dict = all_stats[param]
+
+        # Loop through each airport
+        for icao in stats_dict:
+
+            # Get scores for all TAF types
+            g_scores = {t_name: stats_dict[icao][f'g_{taf_type}'] 
+                        for taf_type, t_name in TAF_TYPES_PLOT.items()}
+            
+            # Continue to next ICAO if any scores are NaN
+            if any([math.isnan(score) for score in g_scores.values()]):
+                continue
+
+            # Loop though TAF types and add to dictionaries
+            for t_name, g_score in g_scores.items():
+                t_stats[param][t_name].append(g_score)
+                p_stats['Sharpe GSS'].append(g_score)
+                p_stats['Parameter'].append(PARAMS[param])
+                p_stats['TAF Type'].append(t_name)
+
+    # Create dataframe from data
+    plot_stats = pd.DataFrame(p_stats)
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Create box plot
+    g_box = sns.boxplot(data=plot_stats, x='Parameter', 
+                        y='Sharpe GSS', hue='TAF Type', ax=ax)
+
+    # Add vertical line separating parameter
+    ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
+
+    # Formatting, etc
+    ax.set_xlabel('Parameter', weight='bold')
+    ax.set_ylabel('Sharpe GSS', weight='bold')
+    ax.tick_params(axis='x', labelsize=15)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    plt.setp(g_box.get_legend().get_title(), weight='bold')
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{STATS_DIR}/g_plots/g_box_plot.png')
+    plt.close()
+
+    return t_stats
 
 
 if __name__ == '__main__':
