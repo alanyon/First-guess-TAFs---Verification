@@ -380,9 +380,9 @@ def get_holders(load_data):
         'wind_info': wind_info, 'vis_info': vis_info, 'cld_info': cld_info,
         'wx_info': wx_info, 'all_info': all_info, 'wind_stats': wind_stats,
         'vis_stats': vis_stats, 'cld_stats': cld_stats, 'wx_stats': wx_stats,
-        'all_stats': all_stats, 'metar_dirs': metar_dirs, 'old_dirs': old_dirs,
-        'bd_dirs': bd_dirs, 'im_dirs': im_dirs, 'man_dirs': man_dirs,
-        'metars_used': metars_used, 'last_day': last_day}
+        'all_stats': all_stats, 'metar_dirs': metar_dirs, 'bd_dirs': bd_dirs, 
+        'im_dirs': im_dirs, 'man_dirs': man_dirs, 'metars_used': metars_used, 
+        'last_day': last_day}
 
     return holders
 
@@ -492,7 +492,7 @@ def get_new_data(holders, load_data):
             # Now icaos and vdts must be the same
             icao = bd_icao
             vdt = bd_vdt
-            vday = bd.date()
+            vday = vdt.date()
 
             # Only need info for required ICAOs
             if icao not in cf.REQ_ICAO_STRS:
