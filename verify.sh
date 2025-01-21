@@ -23,8 +23,8 @@ export TAF_24HR="EGAA EGGP EGNT EGPF EGNM EGPD EGPH EGFF EGNX EGBB EGCN EGGD \
 export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGTE EGPO EGNH EGNR EGNC EGHC EGHE EGKA EGKB EGLF EGMC EGMD \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK"
-export TAF_TYPES="BestData Improver Operational"
-export COMBS="bdim isbd isim"
+export TAF_TYPES="BestData Improver Manual"
+export COMBS="bdim mabd maim"
 export VERIF_START=20230804
 export VERIF_END=20250104
 MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
@@ -48,29 +48,29 @@ for icao in $TAF_9HR; do
     length[$icao]=9
 done
 
-# Run TAF analysis for Operational and FirstGuess
-for icao in $ALL_TAFS; do
-duration=${length[$icao]}
-  for month in $MONTHS; do
-    ndays=`cal ${month:4:6} ${month:0:4} | grep . | fmt -1 | tail -1`
-    start=${month}010000
-    end=${month}${ndays}2359
-    echo ${icao} ${start} ${end}
-    for taf_type in ${TAF_TYPES}; do
-      outdir=${DATA_DIR}/${taf_type}
-      outfile=${outdir}/${icao}_${month}.out
-      visfile=${outdir}/${icao}_${month}_vis.nc
-      clbfile=${outdir}/${icao}_${month}_clb.nc
-      uncvisfile=${outdir}/${icao}_${month}_vis_unc.nc
-      uncclbfile=${outdir}/${icao}_${month}_clb_unc.nc
-      configfile=${taf_type}.cfg
-      date >  $outfile
-      python driver.py ${start} ${end} ${icao} ${duration} ${visfile} ${clbfile} ${uncvisfile} ${uncclbfile} ${configfile} >> $outfile
-      date >>  $outfile
-    done
-  done
-  python print_stats.py ${icao}
-done
+# # Run TAF analysis for Operational and FirstGuess
+# for icao in $ALL_TAFS; do
+# duration=${length[$icao]}
+#   for month in $MONTHS; do
+#     ndays=`cal ${month:4:6} ${month:0:4} | grep . | fmt -1 | tail -1`
+#     start=${month}010000
+#     end=${month}${ndays}2359
+#     echo ${icao} ${start} ${end}
+#     for taf_type in ${TAF_TYPES}; do
+#       outdir=${DATA_DIR}/${taf_type}
+#       outfile=${outdir}/${icao}_${month}.out
+#       visfile=${outdir}/${icao}_${month}_vis.nc
+#       clbfile=${outdir}/${icao}_${month}_clb.nc
+#       uncvisfile=${outdir}/${icao}_${month}_vis_unc.nc
+#       uncclbfile=${outdir}/${icao}_${month}_clb_unc.nc
+#       configfile=${taf_type}.cfg
+#       date >  $outfile
+#       python driver.py ${start} ${end} ${icao} ${duration} ${visfile} ${clbfile} ${uncvisfile} ${uncclbfile} ${configfile} >> $outfile
+#       date >>  $outfile
+#     done
+#   done
+#   python print_stats.py ${icao}
+# done
 
 # Make some plots
 module unload scitools

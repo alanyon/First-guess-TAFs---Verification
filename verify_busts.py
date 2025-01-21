@@ -925,7 +925,7 @@ def plot_param(holders, param, summary_stats):
                      'man increase', 'man decrease', 'man dir', 'man all']
     elif param == 'wx':
         bust_types = ['Significant\nweather busts'] * 3
-        taf_types = ['BestData First Guess TAFs', 'IMPROVER Guess TAFs',
+        taf_types = ['BestData First Guess TAFs', 'IMPROVER First Guess TAFs',
                      'Manual TAFs']
         bust_keys = ['bd all', 'im all', 'man all']
     else:
@@ -1011,6 +1011,8 @@ def plot_summary(summary_stats):
     Returns:
         None
     """    
+    print(summary_stats)
+    print([len(x) for x in summary_stats.values()])
     # Create bar plot
     fig, ax = plt.subplots(figsize=(14, 14))
     bar = sns.barplot(data=summary_stats, x='Number of Busts', y='Bust Type',
