@@ -56,9 +56,9 @@ END = os.environ['VERIF_END']
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES = {'ol': 'Old', 'ma': 'Manual', 'nx': 'New_xg', 'nr': 'New_rf'}
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
-TAF_TYPES_PLOT = {'ol': 'Old First Guess TAFs',
-                  'nx': 'New First Guess TAFs\n(XGBoost)',
-                  'nr': 'New First Guess TAFs\n(Random Forest)',
+TAF_TYPES_PLOT = {'ol': 'Old IMPROVER TAFs',
+                  'nx': 'New IMPROVER TAFs\n(XGBoost)',
+                  'nr': 'New IMPROVER TAFs\n(Random Forest)',
                   'ma': 'Manual TAFs'}
 TAF_TYPES_LABELS = {'ol': 'Old', 'ma': 'Manual', 'nx': 'New XGBoost',
                     'nr': 'New Random Forest'}
@@ -100,26 +100,26 @@ def main(req_obs, unc):
         # Empty lists to append stats to
         stats_dict = get_stats(param, unc, req_obs)
 
-        sp_stats = sp_box_plot(stats_dict, param)
+        # sp_stats = sp_box_plot(stats_dict, param)
 
-        # Determine if changes are statistically significant
-        do_t_tests(sp_stats, param)
+        # # Determine if changes are statistically significant
+        # do_t_tests(sp_stats, param)
 
-        rel_freq_plot(param, stats_dict)
+        # rel_freq_plot(param, stats_dict)
 
         all_stats[param] = stats_dict
 
-        # Make plots for all combinations of TAF types
-        for comb in COMBS:
+        # # Make plots for all combinations of TAF types
+        # for comb in COMBS:
 
-            # Scatter plots showing Gerrity scores for all airports
-            make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
+        #     # Scatter plots showing Gerrity scores for all airports
+        #     make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
 
     # Create Gerrity score box plots
     g_stats = g_box_plot(all_stats)
 
-    # Determine if changes are statistically significant
-    do_g_t_tests(g_stats)
+    # # Determine if changes are statistically significant
+    # do_g_t_tests(g_stats)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -1138,6 +1138,14 @@ def g_box_plot(all_stats):
 
     # Add vertical line separating parameter
     ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
+
+    # Add horizontal lines with CAA targets from halfway along x-axis
+    ax.axhline(0.426, color='red', linestyle='--', alpha=0.7, xmax=0.5)
+    ax.axhline(0.345, color='red', linestyle='--', alpha=0.7, xmax=0.5)
+    ax.axhline(0.366, color='red', linestyle='--', alpha=0.7, xmax=0.5)
+    ax.axhline(0.517, color='red', linestyle='--', alpha=0.7, xmin=0.5)
+    ax.axhline(0.468, color='red', linestyle='--', alpha=0.7, xmin=0.5)
+    ax.axhline(0.457, color='red', linestyle='--', alpha=0.7, xmin=0.5)
 
     # Formatting, etc
     ax.set_xlabel('Parameter', weight='bold')

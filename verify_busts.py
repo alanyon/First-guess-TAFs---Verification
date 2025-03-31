@@ -87,7 +87,7 @@ def main(load_data):
     vis_busts = plot_param(holders, 'vis', summary_stats)
     wx_busts = plot_param(holders, 'wx', summary_stats)
     cld_busts = plot_param(holders, 'cld', summary_stats)
-    # wind_busts = plot_param(holders, 'wind', summary_stats)
+    wind_busts = plot_param(holders, 'wind', summary_stats)
     plot_summary(summary_stats)
     # t_tests(vis_busts, cld_busts, wx_busts, wind_busts)
 
@@ -925,9 +925,9 @@ def plot_param(holders, param, summary_stats):
     if param == 'wind':
         bust_types = ['Observed\nwind higher', 'Observed\nwind lower',
                       'Wind direction\nbusts', 'Total\nwind busts'] * 4
-        taf_types = (['Old First Guess TAFs'] * 4
-                     + ['New First Guess TAFs\n(XGBoost)'] * 4
-                     + ['New First Guess TAFs\n(Random Forest)'] * 4
+        taf_types = (['Old IMPROVER TAFs'] * 4
+                     + ['New IMPROVER TAFs\n(XGBoost)'] * 4
+                     + ['New IMPROVER TAFs\n(Random Forest)'] * 4
                      + ['Manual TAFs'] * 4)
         bust_keys = ['old increase', 'old decrease', 'old dir', 'old all',
                      'xg increase', 'xg decrease', 'xg dir', 'old all',
@@ -935,16 +935,16 @@ def plot_param(holders, param, summary_stats):
                      'man increase', 'man decrease', 'man dir', 'man all']
     elif param == 'wx':
         bust_types = ['Significant\nweather busts'] * 4
-        taf_types = ['Old First Guess TAFs', 'New First Guess TAFs\n(XGBoost)',
-                     'New First Guess TAFs\n(Random Forest)', 'Manual TAFs']
+        taf_types = ['Old IMPROVER TAFs', 'New IMPROVER TAFs\n(XGBoost)',
+                     'New IMPROVER TAFs\n(Random Forest)', 'Manual TAFs']
         bust_keys = ['old all', 'xg all', 'rf all', 'man all']
     else:
         bust_types = [f'Observed\n{cf.W_NAMES[param]} higher',
                       f'Observed\n{cf.W_NAMES[param]} lower',
                       f'Total\n{cf.W_NAMES[param]} busts'] * 4
-        taf_types = (['Old First Guess TAFs'] * 3
-                     + ['New First Guess TAFs\n(XGBoost)'] * 3
-                     + ['New First Guess TAFs\n(Random Forest)'] * 3
+        taf_types = (['Old IMPROVER TAFs'] * 3
+                     + ['New IMPROVER TAFs\n(XGBoost)'] * 3
+                     + ['New IMPROVER TAFs\n(Random Forest)'] * 3
                      + ['Manual TAFs'] * 3)
         bust_keys = ['old increase', 'old decrease', 'old all',
                      'xg increase', 'xg decrease', 'xg all',
