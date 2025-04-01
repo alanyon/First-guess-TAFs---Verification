@@ -33,7 +33,7 @@ def extract(args):
             taf_session = sql.orm.sessionmaker(bind=taf_engine)()
 
             metar_engine  = sql.create_engine(args.metar_connection_string,
-                                              echo='debug' if args.sql_debug else False)
+                                                echo='debug' if args.sql_debug else False)
             metar_session = sql.orm.sessionmaker(bind=metar_engine)()
 
             # Get all required TAFs
