@@ -1,4 +1,8 @@
 # Ignore pycache and output files
 **/__pycache__/
 *.pyc
-output.txt
+output*
+*db
+*html
+*txt
+Extract_TAFs/
