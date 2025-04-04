@@ -54,10 +54,13 @@ END = os.environ['VERIF_END']
 
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
-TAF_TYPES = {'bd': 'BestData', 'im': 'Improver', 'ma': 'Manual'}
+TAF_TYPES = {'i1': 'ImproverNoObsOpt', 'i2': 'ImproverNoObsPes', 
+             'i3': 'ImproverObsOpt', 'i4': 'ImproverObsPes', 'ma': 'Manual'}
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
-TAF_TYPES_PLOT = {'bd': 'BestData TAFs',
-                  'im': 'IMPROVER TAFs',
+TAF_TYPES_PLOT = {'i1': 'IMPROVER TAFs\n(optimistic)',
+                  'i2': 'IMPROVER TAFs\n(pessimistic)',
+                  'i3': 'IMPROVER TAFs\nwith obs (optimistic)',
+                  'i4': 'IMPROVER TAFs\nwith obs (pessimistic)',
                   'ma': 'Manual TAFs'}
 TAF_TYPES_LABELS = {'bd': 'BestData', 'im': 'IMPROVER', 'ma': 'Manual'}
 NUM_CATS = {'vis': 6, 'clb': 5}
@@ -181,9 +184,9 @@ def add_detail(ax, lim_min, lim_max, lim_diff, comb):
     fgx, fgy, isx, isy = [lim_min + pos * lim_diff for pos in positions]
 
     # Add extra text
-    ax.text(fgx, fgy, f'{TAF_TYPES_LABELS[comb[2:]]} TAF\nScores Higher',
+    ax.text(fgx, fgy, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
             c='green', fontsize=15)
-    ax.text(isx, isy, f'{TAF_TYPES_LABELS[comb[:2]]} TAF\nScores Higher',
+    ax.text(isx, isy, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
             c='red', fontsize=15)
 
     return ax
@@ -534,7 +537,7 @@ def get_stats(param, unc, req_obs):
                 # Check that airport has sufficient data (should be same
                 # number of obs in both types of TAF so only need to
                 # check one)
-                if f_key == 'bd':
+                if f_key == 'i1':
                     stats_dict = check_obs(stats_dict, row, req_obs)
 
     # Remove airports with insufficient data
@@ -645,10 +648,8 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
 
     # Set titles, legend, etc
     ax.set_title(title, fontsize=20, weight='bold')
-    ax.set_xlabel(f'Scores Based on {TAF_TYPES_LABELS[comb[:2]]} TAFs',
-                  fontsize=14)
-    ax.set_ylabel(f'Scores Based on {TAF_TYPES_LABELS[comb[2:]]} TAFs',
-                  fontsize=14)
+    ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}', fontsize=14)
+    ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}', fontsize=14)
     ax.legend(loc='upper center', ncol=2, fontsize=12,
               bbox_to_anchor=(1.45, 1.0))
 
