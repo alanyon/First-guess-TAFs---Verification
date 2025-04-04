@@ -27,6 +27,7 @@ Written by Andre Lanyon.
 """
 import csv
 import math
+import json
 import os
 from datetime import datetime
 from itertools import cycle, islice
@@ -51,18 +52,15 @@ TAF_24HR = os.environ['TAF_24HR'].split()
 TAF_9HR = os.environ['TAF_9HR'].split()
 START = os.environ['VERIF_START']
 END = os.environ['VERIF_END']
+TAF_TYPES = os.environ['TAF_TYPES'].split()
+TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
+PLOT_TITLES = os.environ.get('PLOT_TITLES')
+TAF_TYPES_PLOT = json.loads(PLOT_TITLES)
 
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
-TAF_TYPES = {'i1': 'ImproverNoObsOpt', 'i2': 'ImproverNoObsPes', 
-             'i3': 'ImproverObsOpt', 'i4': 'ImproverObsPes', 'ma': 'Manual'}
-TAF_TYPES_INV = {v: k for k, v in TAF_TYPES.items()}
-TAF_TYPES_PLOT = {'i1': 'IMPROVER TAFs\n(optimistic)',
-                  'i2': 'IMPROVER TAFs\n(pessimistic)',
-                  'i3': 'IMPROVER TAFs\nwith obs (optimistic)',
-                  'i4': 'IMPROVER TAFs\nwith obs (pessimistic)',
-                  'ma': 'Manual TAFs'}
-TAF_TYPES_LABELS = {'bd': 'BestData', 'im': 'IMPROVER', 'ma': 'Manual'}
+TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
+TAF_TYPES_INV = {v: k for k, v in TAF_TYPES_DICT.items()}
 NUM_CATS = {'vis': 6, 'clb': 5}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {'clb_9': 0.517, 'clb_24': 0.468, 'clb_30': 0.457, 'vis_9': 0.426,
@@ -82,7 +80,7 @@ def main(req_obs, unc):
         unc (str): String to add to filenames if uncertainty is included
     """
     # Make directories if needed
-    for p_dir in ['rl_plots', 'scatter_plots']:
+    for p_dir in ['rl_plots', 'scatter_plots', 'g_plots', 'sp_plots']:
         if not os.path.exists(f'{STATS_DIR}/{p_dir}'):
             os.makedirs(f'{STATS_DIR}/{p_dir}')
 
@@ -101,7 +99,7 @@ def main(req_obs, unc):
         # Empty lists to append stats to
         stats_dict = get_stats(param, unc, req_obs)
 
-        sp_stats = sp_box_plot(stats_dict, param)
+        sp_box_plot(stats_dict, param)
 
         rel_freq_plot(param, stats_dict)
 
@@ -114,7 +112,7 @@ def main(req_obs, unc):
             make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
 
     # Create Gerrity score box plots
-    g_stats = g_box_plot(all_stats)
+    g_box_plot(all_stats)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -279,12 +277,12 @@ def add_length_detail(ax, param, length, lim_min, lim_max, lim_diff, comb):
                                    for pos in positions]
 
     # Add extra text
-    ax.text(xtl, ytl1, f'{TAF_TYPES[comb[:2]]}\nTAFs below', color='r')
-    ax.text(xtl, ytl2, f'{TAF_TYPES[comb[2:]]}\nTAFs above', color='g')
+    ax.text(xtl, ytl1, f'{TAF_TYPES_DICT[comb[:2]]}\nTAFs below', color='r')
+    ax.text(xtl, ytl2, f'{TAF_TYPES_DICT[comb[2:]]}\nTAFs above', color='g')
     ax.text(xtr, ytr, 'Both above', color='g')
     ax.text(xbl, ybl, 'Both below', color='r')
-    ax.text(xbr, ybr1, f'{TAF_TYPES[comb[2:]]}\nTAFs below', color='r')
-    ax.text(xbr, ybr2, f'{TAF_TYPES[comb[:2]]}\nTAFs above', color='g')
+    ax.text(xbr, ybr1, f'{TAF_TYPES_DICT[comb[2:]]}\nTAFs below', color='r')
+    ax.text(xbr, ybr2, f'{TAF_TYPES_DICT[comb[:2]]}\nTAFs above', color='g')
 
     return ax
 
@@ -676,7 +674,7 @@ def rel_freq_plot(param, stats_dict):
     obs_frqs = {}
 
     # Loop though TAF types (BestData, IMPROVER, manual)
-    for t_type_ind, taf_type in enumerate(TAF_TYPES):
+    for t_type_ind, taf_type in enumerate(TAF_TYPES_DICT):
 
         # Get stats for each airport
         for icao_ind, (icao, i_stats) in enumerate(stats_dict.items()):
@@ -711,7 +709,7 @@ def rel_freq_plot(param, stats_dict):
         mean_fcst_rfs = np.array(total_fcst_rf) / len(stats_dict)
         for frf, cat in zip(mean_fcst_rfs, cats):
             plot_stats['Relative Frequency'].append(frf)
-            plot_stats['Type'].append(f'{TAF_TYPES[taf_type]} forecast')
+            plot_stats['Type'].append(f'{TAF_TYPES_DICT[taf_type]} forecast')
             plot_stats['TAF Category'].append(cat)
 
         # Add mean observed relative frequencies if necessary
@@ -730,7 +728,7 @@ def rel_freq_plot(param, stats_dict):
     fig, ax = plt.subplots(figsize=(8, 6))
 
     # Create bar plots
-    # hue_order = [f'{t_type} forecast' for t_type in TAF_TYPES.values()]
+    # hue_order = [f'{t_type} forecast' for t_type in TAF_TYPES_DICT.values()]
     # hue_order.append('Observed')
     # rf_bar = sns.barplot(plot_stats, x='TAF Category', y='Relative Frequency',
     #                      hue='Type', hue_order=hue_order)

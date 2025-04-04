@@ -1,0 +1,3 @@
+[submodule "taf_monitor"]
+	path = taf_monitor
+	url = git@github.com:MetOffice/taf_monitor.git

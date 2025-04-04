@@ -1,19 +1,29 @@
 """
 Module containing constants for use in other scripts.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.rrule import DAILY, rrule
+import os
+import json
+
+# Import environment variables
+D_DIR = os.environ['DATA_DIR']
+T_STRS = os.environ['TAF_TYPES'].split()
+VERIF_START = os.environ['VERIF_START']
+VERIF_END = os.environ['VERIF_END']
+PLOT_TITLES = os.environ['PLOT_TITLES']
+TAF_TYPES = json.loads(PLOT_TITLES)
 
 # Accepted first guess TAFs
-D_DIR = '/data/users/andre.lanyon/tafs/verification/20230805-20250304_test'
-AUTO_TAFS_LINES = [f'{D_DIR}/decodes/Output_im_no_obs_opt/acceptedTafs.csv',
-                   f'{D_DIR}/decodes/Output_im_no_obs_pes/acceptedTafs.csv',
-                   f'{D_DIR}/decodes/Output_im_obs_opt/acceptedTafs.csv',
-                   f'{D_DIR}/decodes/Output_im_obs_pes/acceptedTafs.csv']
+AUTO_TAFS_LINES = []
+for t_str in T_STRS:
+    if t_str == 'Manual':
+        continue
+    AUTO_TAFS_LINES.append(f'{D_DIR}/decodes/Output_{t_str}/acceptedTafs.csv')
 
 # Start and end dates for verification period
-START_DT = datetime(2023, 8, 5)
-END_DT = datetime(2025, 3, 5)
+START_DT = datetime.strptime(VERIF_START, '%Y%m%d')
+END_DT = datetime.strptime(VERIF_END, '%Y%m%d') + timedelta(days=1)
 
 # Days in verification period
 DAYS = list(rrule(DAILY, interval=1, dtstart=START_DT, until=END_DT))
@@ -68,11 +78,11 @@ REQ_ICAO_STRS = {
     'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford'}
 
 # TAF type names and abbrieviations
-TAF_TYPES = {'noo': 'IMPROVER Optimistic\nTAFs', 
-             'nop': 'IMPROVER Pessimistic\nTAFs', 
-             'oo': 'IMPROVER Optimistic\nTAFs with Obs',
-             'op': 'IMPROVER Pessimistic\nTAFs with Obs', 
-             'man': 'Manual TAFs'}
+# TAF_TYPES = {'noo': 'IMPROVER Optimistic\nTAFs', 
+#              'nop': 'IMPROVER Pessimistic\nTAFs', 
+#              'oo': 'IMPROVER Optimistic\nTAFs with Obs',
+#              'op': 'IMPROVER Pessimistic\nTAFs with Obs', 
+#              'man': 'Manual TAFs'}
 B_TYPES = ['increase', 'decrease', 'both', 'all']
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']
 D_TYPES = ['increase', 'decrease', 'dir']
