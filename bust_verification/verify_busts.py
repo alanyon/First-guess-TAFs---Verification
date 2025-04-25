@@ -57,12 +57,15 @@ def main(load_data):
     # Get new data and add to data holders
     get_new_data(holders, load_data)
 
+    # Create directories if necessary
+    ps.create_dirs()
+
     # # Create spreadsheets
-    ps.write_to_excel(holders, 'wind')
+    # ps.write_to_excel(holders, 'wind')
     ps.write_to_excel(holders, 'all')
 
-    # Make plots
-    ps.plot_dirs(holders)
+    # # Make plots
+    # ps.plot_dirs(holders)
     summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
     ps.plot_param(holders, 'vis', summary_stats)
     ps.plot_param(holders, 'wx', summary_stats)
@@ -94,8 +97,9 @@ def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
     # Do not need to continue if no busts
     if not busts_metars:
         return
-
-    for (busts, metar) in busts_metars:
+    
+    # Loop through all busts and METARs
+    for (busts, metar, _) in busts_metars:
 
         # For wind stats
         if s_type == 'wind':
@@ -160,10 +164,11 @@ def count_busts(taf, metars, icao, start, end):
     try:
         busts = CheckTafThread(icao, start, end, taf, metars).run()
 
-    # If any issues, assume TAF is bad and print it out to check
-    except:
-        print('Bad TAF', taf)
+    # If any issues, assume TAF is bad and print error out to check
+    except Exception as e:
+        print(f'Error: {e}')
         busts = None
+        print(f'Problem with TAF: {taf}')
 
     return busts
 
@@ -469,6 +474,7 @@ def get_new_data(holders, load_data):
 
     # Read in IMPROVER TAFs files
     auto_tafs_lines = [get_taf_lines(fname) for fname in cf.AUTO_TAFS_LINES]
+
     # Loop though all days in period
     for day in cf.DAYS:
 
@@ -587,7 +593,10 @@ def update_infos(holders, icao, vc_tafs, vc_busts):
         # Otherwise, append info
         w_info = {t_type: [vc_tafs[t_type], vc_busts[t_type][w_lng]]
                   for t_type in cf.TAF_TYPES}
+        
+
         holders[f'{w_type}_info'][icao].append(w_info)
+
         # w_info = sum([[taf, busts[w_lng]]
         #               for taf, busts in zip(all_tafs, all_busts)], [])
         # holders[f'{w_type}_info'][icao].append(w_info)

@@ -2,6 +2,7 @@
 Module to produce plots and spreadsheets for bust TAF verification.
 
 Functions:
+    create_dirs: Creates directories if needed.
     mets_all: Writes METAR to spreadsheet.
     mets_wind: Writes METAR to spreadsheet.
     plot_dirs: Plots bar charts showing bust information for each TAF.
@@ -26,6 +27,27 @@ sns.set_style('darkgrid')
 sns.set(font_scale=1.5)
 
 
+def create_dirs():
+    """
+    Creates directories if needed.
+
+    Args:
+        None
+    Returns:
+        None
+    """
+    # Make plots directory if needed
+    if not os.path.exists(f'{cf.D_DIR}/plots'):
+        os.makedirs(f'{cf.D_DIR}/plots')
+
+    # Loop through each ICAO
+    for icao in cf.REQ_ICAO_STRS:
+
+        # Make directory if needed
+        if not os.path.exists(f'{cf.D_DIR}/plots/{icao}'):
+            os.makedirs(f'{cf.D_DIR}/plots/{icao}')
+
+
 def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
     """
     Writes METAR to spreadsheet in appropriate format with message containing
@@ -47,7 +69,7 @@ def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
     for bust in ver_lst:
 
         # Unpack list
-        bust_types, metar = bust
+        bust_types, metar, _,  = bust
 
         # Join ypes of bust together
         msg = ' and '.join(bust_types)
@@ -114,7 +136,7 @@ def mets_wind(ver_lst, worksheet, workbook, m_row_num, col):
     for bust in ver_lst:
 
         # Unpack list
-        bust_types, metar = bust
+        bust_types, metar, _ = bust
 
         # Colour METAR based on bust type
         if bust_types['mean increase'] or bust_types['gust increase']:
@@ -249,10 +271,6 @@ def plot_param(holders, param, summary_stats):
         # Only get stats from required ICAOs
         if icao not in cf.REQ_ICAO_STRS:
             continue
-
-        # Make directory if needed
-        if not os.path.exists(f'{cf.D_DIR}/plots/{icao}'):
-            os.makedirs(f'{cf.D_DIR}/plots/{icao}')
 
         # Get stats for airport
         stats = stats_abs[icao]
@@ -392,7 +410,7 @@ def write_to_excel(holders, w_type):
         worksheet = workbook.add_worksheet(icao)
 
         # Define formats for filling cells
-        taf_format = workbook.add_format({'text_wrap':'true'})
+        taf_format = workbook.add_format({'text_wrap': True})
         bold = workbook.add_format({'bold': True})
         big_bold = workbook.add_format({'bold': True, 'underline': True,
                                         'font_size': 14})
@@ -448,6 +466,8 @@ def write_to_excel(holders, w_type):
 
                 # Change TAF format to add to worksheet
                 t_taf, lines = taf_str(taf)
+                # print('t_taf', t_taf)
+
                 all_lines.append(lines)
 
                 # Write TAF to spreadsheet

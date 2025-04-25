@@ -14,6 +14,11 @@ fi
 # Loop through all taf types
 for taf_type in ${TAF_TYPES}; do
 
+    # Ignore Manual taf type
+    if [ "${taf_type}" == "Manual" ]; then
+        continue
+    fi
+
     # Make directories if necessary
     if [ ! -d "${DECODE_DIR}/Input_${taf_type}" ]; then
         mkdir "${DECODE_DIR}/Input_${taf_type}"
