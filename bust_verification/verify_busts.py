@@ -25,6 +25,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 import metdb
+import pandas as pd
 import numpy as np
 import seaborn as sns
 import useful_functions as uf
@@ -61,8 +62,8 @@ def main(load_data):
     ps.create_dirs()
 
     # # Create spreadsheets
-    # ps.write_to_excel(holders, 'wind')
-    ps.write_to_excel(holders, 'all')
+    # # ps.write_to_excel(holders, 'wind')
+    # ps.write_to_excel(holders, 'all')
 
     # # Make plots
     # ps.plot_dirs(holders)
@@ -71,9 +72,44 @@ def main(load_data):
     ps.plot_param(holders, 'wx', summary_stats)
     ps.plot_param(holders, 'cld', summary_stats)
     ps.plot_param(holders, 'wind', summary_stats)
+
+    # TESTING #
+    # Keep only total and significant weather bust types
+    summary_stats = pd.DataFrame(summary_stats)
+    summary_stats = summary_stats[summary_stats['Bust Type'].isin(
+        ['Total\nvisibility busts', 'Significant\nweather busts', 
+         'Total\ncloud busts', 'Total\nwind busts'])]
+
     ps.plot_summary(summary_stats)
+    # ps.plot_wx(holders)
+    # ps.plot_taf_lens(holders)
+    # ps.plot_cats(holders)
 
 
+def add_cats(holders, s_type, icao, cats, t_type, w_type):
+    """
+    Adds bust stats to appropriate lists in dictionaries.
+
+    Args:
+        holders (dict): Dictionaries to store data
+        s_type (str): Type of stats to add
+        icao (str): ICAO of TAF
+        cats (dict): Dictionary of cats covered in TAF
+        t_type (str): TAF type
+        w_type (str): Weather type
+    Returns:
+        None
+    """
+    # Key for holders dictionary
+    s_key = f'{s_type}_cats'
+
+    # Get busts and METARs for para from list
+    w_cats = cats[cf.W_NAMES[w_type]]
+
+    # Extend list of categories covered
+    holders[s_key][icao][t_type].extend(w_cats)
+    
+    
 def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
     """
     Adds bust stats to appropriate lists in dictionaries.
@@ -139,8 +175,14 @@ def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
 
         # For wx stats
         elif s_type == 'wx':
-
             holders[s_key][icao][f'{t_type} all'] += 1
+
+            # Add bust type
+            for bust in busts:
+                if f'{t_type} {bust}' in holders[s_key][icao]:
+                    holders[s_key][icao][f'{t_type} {bust}'] += 1
+                else:
+                    holders[s_key][icao][f'{t_type} {bust}'] = 1
 
         # For summary of all busts stats
         else:
@@ -162,15 +204,15 @@ def count_busts(taf, metars, icao, start, end):
     """
     # Try to find busts
     try:
-        busts = CheckTafThread(icao, start, end, taf, metars).run()
+        busts, cats_covered = CheckTafThread(icao, start, end, taf, metars).run()
 
     # If any issues, assume TAF is bad and print error out to check
     except Exception as e:
         print(f'Error: {e}')
-        busts = None
+        busts, cats_covered = None, None
         print(f'Problem with TAF: {taf}')
 
-    return busts
+    return busts, cats_covered
 
 
 def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
@@ -237,10 +279,14 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
             # Get all METARs valid for TAF period
             v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
 
-            # Count busts for all TAF types
+            # Count busts and cats covered for all TAF types
             all_tafs = [*a_tafs, man_taf]
-            all_busts = [count_busts(taf, v_metars, icao, start, end)
-                         for taf in all_tafs]
+            all_busts, all_cats_covered = [], []
+            for taf in all_tafs:
+                busts, cats_covered = count_busts(taf, v_metars, icao, start,
+                                                  end)
+                all_busts.append(busts)
+                all_cats_covered.append(cats_covered)
 
             # Move on if bad TAF found
             if any(busts is None for busts in all_busts):
@@ -250,15 +296,21 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
             num_float = (end - start).total_seconds() / 1800
             holders['metars_used'][icao] += int(np.round(num_float))
 
-            # Collectinto dictionaries
+            # Collect into dictionaries
             vc_busts = dict(zip(cf.TAF_TYPES, all_busts))
+            vc_cats = dict(zip(cf.TAF_TYPES, all_cats_covered))
             vc_tafs = dict(zip(cf.TAF_TYPES, all_tafs))
 
             # Add to all stats dictionaries
-            update_stats(holders, vc_busts, icao)
-
+            update_stats(holders, vc_busts, vc_cats, icao)
+                
             # Add to all info dictionaries
             update_infos(holders, icao, vc_tafs, vc_busts)
+
+            # Get TAF lengths
+            for t_type, taf in vc_tafs.items():
+                taf_length = get_taf_length(taf)
+                holders['taf_lens'][icao][t_type].append(taf_length)
 
             # Break for loop so only one TAF is used
             break
@@ -392,6 +444,10 @@ def get_holders(load_data):
     cld_stats = {icao: deepcopy(vis_cld_template) for icao in cf.REQ_ICAO_STRS}
     wx_stats = {icao: {f'{t_type} all': 0 for t_type in cf.TAF_TYPES}
                 for icao in cf.REQ_ICAO_STRS}
+    simple_template = {f'{t_type}': [] for t_type in cf.TAF_TYPES}
+    vis_cats = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
+    cld_cats = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
+    taf_lens = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
     all_template = {f'{t_type} {w_type}': 0 for t_type in cf.TAF_TYPES
                     for w_type in cf.W_NAMES}
     all_stats = {icao: deepcopy(all_template) for icao in cf.REQ_ICAO_STRS}
@@ -408,7 +464,8 @@ def get_holders(load_data):
         'wind_info': wind_info, 'vis_info': vis_info, 'cld_info': cld_info,
         'wx_info': wx_info, 'all_info': all_info, 'wind_stats': wind_stats,
         'vis_stats': vis_stats, 'cld_stats': cld_stats, 'wx_stats': wx_stats,
-        'all_stats': all_stats, 'dirs_stats': dirs_stats,
+        'all_stats': all_stats, 'vis_cats': vis_cats, 'cld_cats': cld_cats,
+        'taf_lens': taf_lens, 'dirs_stats': dirs_stats,
         'metars_used': metars_used, 'last_day': last_day}
 
     return holders
@@ -491,6 +548,7 @@ def get_new_data(holders, load_data):
         # Find all IMPROVER TAFs valid on this day
         auto_tafs = [get_day_tafs(day, lines) for lines in auto_tafs_lines]
 
+
         # If no TAFs found, move to next day
         if not all(auto_tafs):
             continue
@@ -513,6 +571,33 @@ def get_new_data(holders, load_data):
         # Pickle at the end of each day in case something breaks
         for name, data in holders.items():
             uf.pickle_data(data, f'{cf.D_DIR}/pickles/{name}')
+
+
+def get_taf_length(taf):
+    """
+    Returns the length of the TAF (base conditions plus change groups).
+
+    Args:
+        taf (str): TAF to check
+    Returns:
+        taf_length (int): Length of TAF
+    """
+    # Initialise count
+    count = 1
+
+    # Loop through TAF elements
+    for ind, ele in enumerate(taf):
+
+        # These indicate a new change group
+        if ele in ['BECMG', 'PROB30', 'PROB40']:
+            count += 1
+
+        # TEMPO can indicate new change group only if not preceded by
+        # PROB30 or PROB40
+        elif ele == 'TEMPO' and taf[ind - 1] not in ['PROB30', 'PROB40']:
+            count += 1
+
+    return count
 
 
 def get_taf_lines(f_path):
@@ -602,26 +687,34 @@ def update_infos(holders, icao, vc_tafs, vc_busts):
         # holders[f'{w_type}_info'][icao].append(w_info)
 
 
-def update_stats(holders, vc_busts, icao):
+def update_stats(holders, vc_busts, vc_cats, icao):
     """
     Updates bust statistics dictionaries.
 
     Args:
         holders (dict): Dictionaries to store data
         vc_busts (dict): Dictionary of busts
+        vc_cats (dict): Dictionary of categories covered
         icao (str): ICAO of TAFs
     Returns:
         None
     """
     # Loop through all TAF types and weather types
-    for (t_type, p_busts), w_type in itertools.product(vc_busts.items(),
-                                                       cf.W_NAMES):
+    for t_type, w_type in itertools.product(cf.TAF_TYPES, cf.W_NAMES):
+
+        # Define busts and cats
+        p_busts = vc_busts[t_type]
+        cats = vc_cats[t_type]
 
         # Add to 'wind', 'vis', 'cld' and 'wx' dictionaries
         add_stats(holders, w_type, icao, p_busts, t_type, w_type)
 
         # Add to 'all' dictionaries
         add_stats(holders, 'all', icao, p_busts, t_type, w_type)
+
+        # Add to 'vis_cats' dictionary
+        if w_type in ['vis', 'cld']:
+            add_cats(holders, w_type, icao, cats, t_type, w_type)
 
 
 if __name__ == "__main__":

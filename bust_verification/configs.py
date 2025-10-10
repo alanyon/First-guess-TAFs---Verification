@@ -44,7 +44,8 @@ DIRS = ['N', 'E', 'S', 'W', 'VRB']
 # String names of lists and dictionaries used to collect data
 NAMES = ['wind_info', 'vis_info', 'cld_info', 'wx_info', 'all_info', 
          'wind_stats', 'vis_stats', 'cld_stats', 'wx_stats', 'all_stats', 
-         'dirs_stats', 'metars_used', 'last_day']
+         'vis_cats', 'cld_cats', 'taf_lens', 'dirs_stats', 'metars_used', 
+         'last_day']
 
 # Dictionaries mapping short weather names to long names
 W_NAMES = {'vis': 'visibility', 'wind': 'wind', 'wx': 'weather',
@@ -55,7 +56,7 @@ P_NAMES = {'vis': 'Visibility', 'wind': 'Wind', 'wx': 'Significant Weather',
 # ICAOS to use
 REQ_ICAOS = [b'EGAA ', b'EGAC ', b'EGAE ', b'EGBB ', b'EGBJ ', b'EGCC ', 
              b'EGCK ', b'EGFF ', b'EGGD ', b'EGGP ', b'EGGW ', b'EGHH ', 
-             b'EGHI ', b'EGKA ', b'EGKB ', b'EGKK ', b'EGLF ', b'EGLL ', 
+             b'EGHI ', b'EGKB ', b'EGKK ', b'EGLC ', b'EGLF ', b'EGLL ', 
              b'EGMC ', b'EGMD ', b'EGNH ', b'EGNJ ', b'EGNM ', b'EGNR ', 
              b'EGNT ', b'EGNV ', b'EGNX ', b'EGPA ', b'EGPB ', b'EGPC ', 
              b'EGPD ', b'EGPE ', b'EGPF ', b'EGPH ', b'EGPI ', b'EGPK ', 
@@ -66,9 +67,9 @@ REQ_ICAO_STRS = {
     'EGAE': 'Londonderry', 'EGBB': 'Birmingham', 'EGBJ': 'Gloucester',
     'EGCC': 'Manchester Ringway', 'EGCK': 'Caenarfon', 'EGFF': 'Cardiff', 
     'EGGD': 'Bristol', 'EGGP': 'Liverpool', 'EGGW': 'Luton', 
-    'EGHH': 'Bournemouth', 'EGHI': 'Southampton', 'EGKA': 'Shoreham',
-    'EGKB': 'Biggin Hill', 'EGKK': 'Gatwick', 'EGLF': 'Farnborough',
-    'EGLL': 'Heathrow', 'EGMC': 'Southend', 'EGMD': 'Lydd', 
+    'EGHH': 'Bournemouth', 'EGHI': 'Southampton', 'EGKB': 'Biggin Hill', 
+    'EGKK': 'Gatwick', 'EGLC': 'London City', 'EGLF': 'Farnborough',
+    'EGLL': 'Heathrow', 'EGMC': 'Southend', 'EGMD': 'Lydd',
     'EGNH': 'Blackpool', 'EGNJ': 'Humberside', 'EGNM': 'Leeds Bradford', 
     'EGNR': 'Hawarden', 'EGNT': 'Newcastle', 'EGNV': 'Durham Teeside',
     'EGNX': 'East Midlands', 'EGPA': 'Kirkwall', 'EGPB': 'Sumburgh', 
@@ -77,12 +78,16 @@ REQ_ICAO_STRS = {
     'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
     'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford'}
 
-# TAF type names and abbrieviations
-# TAF_TYPES = {'noo': 'IMPROVER Optimistic\nTAFs', 
-#              'nop': 'IMPROVER Pessimistic\nTAFs', 
-#              'oo': 'IMPROVER Optimistic\nTAFs with Obs',
-#              'op': 'IMPROVER Pessimistic\nTAFs with Obs', 
-#              'man': 'Manual TAFs'}
+NINE_HR_STRS = {
+    'EGAC': 'Belfast City', 'EGAE': 'Londonderry', 'EGBJ': 'Gloucester',
+    'EGCK': 'Caenarfon', 'EGHH': 'Bournemouth', 'EGHI': 'Southampton',
+    'EGKB': 'Biggin Hill', 'EGLF': 'Farnborough', 'EGMC': 'Southend', 
+    'EGMD': 'Lydd', 'EGNH': 'Blackpool', 'EGNJ': 'Humberside', 
+    'EGNR': 'Hawarden', 'EGNV': 'Durham Teeside', 'EGPA': 'Kirkwall', 
+    'EGPB': 'Sumburgh', 'EGPC': 'Wick', 'EGPE': 'Inverness', 'EGPI': 'Islay', 
+    'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
+    'EGTE': 'Exeter', 'EGTK': 'Oxford'}
+
 B_TYPES = ['increase', 'decrease', 'both', 'all']
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']
 D_TYPES = ['increase', 'decrease', 'dir']

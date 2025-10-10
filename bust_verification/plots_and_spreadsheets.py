@@ -19,6 +19,8 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import xlsxwriter
+import pandas as pd
+import numpy as np
 
 import configs as cf
 
@@ -179,6 +181,54 @@ def mets_wind(ver_lst, worksheet, workbook, m_row_num, col):
     return new_lines
 
 
+def plot_cats(holders):
+
+    stats = {'TAF Type': [], 'Parameter': [], 
+             'Mean No. of Categories Covered': []}
+    
+    # Loop through all icaos
+    for icao in cf.REQ_ICAO_STRS:
+
+        # Loop through vis and cld
+        for param in ['vis', 'cld']:
+
+            # Loop through taf types
+            for t_type, t_name in cf.TAF_TYPES.items():
+
+                # Get mean number of categories covered and add to 
+                # dictionary
+                cats = holders[f'{param}_cats'][icao][t_type]
+                stats['TAF Type'].append(t_name)
+                stats['Parameter'].append(param)
+                stats['Mean No. of Categories Covered'].append(np.mean(cats))
+
+    # Create dataframe from stats
+    plot_stats = pd.DataFrame(stats)
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Create box plot
+    g_box = sns.boxplot(data=plot_stats, x='Parameter', 
+                        y='Mean No. of Categories Covered', 
+                        hue='TAF Type', ax=ax)
+
+    # Add vertical line separating parameters
+    ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
+
+    # Formatting, etc
+    ax.set_xlabel('Parameter', weight='bold')
+    ax.set_ylabel('Mean No. of Categories Covered', weight='bold')
+    ax.tick_params(axis='x', labelsize=15)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    plt.setp(g_box.get_legend().get_title(), weight='bold')
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{cf.D_DIR}/plots/cats_covered.png')
+    plt.close()
+
+
 def plot_dirs(holders):
     """
     Plots bar charts showing bust information for each TAF, separating busts
@@ -238,22 +288,23 @@ def plot_param(holders, param, summary_stats):
     stats_abs = holders[f'{param}_stats']
 
     # Titles, etc, for creating stats dataframes
+    t_num = len(cf.TAF_TYPES)
     if param == 'wind':
         bust_types = ['Observed\nwind higher', 'Observed\nwind lower',
-                      'Wind direction\nbusts', 'Total\nwind busts'] * 5
+                      'Wind direction\nbusts', 'Total\nwind busts'] * t_num
         taf_types = sum([[p_label] * 4 for p_label in cf.TAF_TYPES.values()],
                         [])
         bust_keys = sum([[f'{t_type} increase', f'{t_type} decrease',
                           f'{t_type} dir', f'{t_type} all']
                          for t_type in cf.TAF_TYPES], [])
     elif param == 'wx':
-        bust_types = ['Significant\nweather busts'] * 5
+        bust_types = ['Significant\nweather busts'] * t_num
         taf_types = cf.TAF_TYPES.values()
         bust_keys = [f'{t_type} all' for t_type in cf.TAF_TYPES]
     else:
         bust_types = [f'Observed\n{cf.W_NAMES[param]} higher',
                       f'Observed\n{cf.W_NAMES[param]} lower',
-                      f'Total\n{cf.W_NAMES[param]} busts'] * 5
+                      f'Total\n{cf.W_NAMES[param]} busts'] * t_num
         taf_types = sum([[p_label] * 3 for p_label in cf.TAF_TYPES.values()],
                         [])
         bust_keys = sum([[f'{t_type} increase', f'{t_type} decrease',
@@ -266,21 +317,28 @@ def plot_param(holders, param, summary_stats):
     total_busts = [0 for _ in bust_types]
 
     # Loop through all icaos
-    for ind, icao in enumerate(stats_abs):
+    t_busts = {}
+    for icao in stats_abs:
 
         # Only get stats from required ICAOs
         if icao not in cf.REQ_ICAO_STRS:
             continue
 
+        # # Only get stats from required ICAOs
+        # if icao not in cf.NINE_HR_STRS:
+        #     continue
+
         # Get stats for airport
         stats = stats_abs[icao]
 
         # Add to or create t_busts dictionary
-        if ind == 0:
-            t_busts = {b_key: [busts] for b_key, busts in stats.items()}
+        if t_busts == {}:
+            for b_key in bust_keys:
+                t_busts[b_key] = [stats[b_key]]
         else:
             for b_key, busts in stats.items():
-                t_busts[b_key].append(busts)
+                if b_key in bust_keys:
+                    t_busts[b_key].append(busts)
 
         # Get bust numbers for icao
         icao_busts = [stats[b_key] for b_key in bust_keys]
@@ -328,22 +386,164 @@ def plot_summary(summary_stats):
         None
     """
     # Create bar plot
-    fig, ax = plt.subplots(figsize=(14, 14))
+    fig, ax = plt.subplots(figsize=(14, 8))
     sns.barplot(data=summary_stats, x='Number of Busts', y='Bust Type',
                 hue='TAF Type')
 
     # Add scores on top of bars
     for ind in ax.containers:
-        ax.bar_label(ind, fontsize=14)
+        ax.bar_label(ind, fontsize=16)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
-    ax.set_xlabel('Number of Busts', weight='bold')
-    ax.set_ylabel('Bust Type', weight='bold')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1), fontsize=18)
+    ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
+    ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
+    ax.tick_params(axis='x', labelsize=16)
+    ax.tick_params(axis='y', labelsize=16)
 
     # Save and close figure
     plt.tight_layout()
     fig.savefig(f'{cf.D_DIR}/plots/summary_busts.png')
+    plt.close()
+
+
+def plot_taf_lens(holders):
+
+    stats = {'TAF Type': [], 'Mean TAF Length': [], 'Airport': []}
+
+    # Loop through all icaos
+    for icao in cf.REQ_ICAO_STRS:
+
+        # Loop through taf types
+        for t_type, t_name in cf.TAF_TYPES.items():
+
+            # Get mean TAF length and add to dictionary
+            taf_lens = holders[f'taf_lens'][icao][t_type]
+            stats['TAF Type'].append(t_name)
+            stats['Mean TAF Length'].append(np.mean(taf_lens))
+            stats['Airport'].append(cf.REQ_ICAO_STRS[icao])
+
+    # Create dataframe from stats
+    plot_stats = pd.DataFrame(stats)
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    # Create box plot
+    t_bar = sns.barplot(data=plot_stats, y='Airport', x='Mean TAF Length', 
+                        hue='TAF Type', ax=ax)
+
+    # Formatting, etc
+    ax.set_xlabel('Mean TAF Length', weight='bold')
+    ax.set_ylabel('Airport', weight='bold')
+    ax.tick_params(axis='x', labelsize=15)
+    ax.tick_params(axis='y', labelsize=12)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    plt.setp(t_bar.get_legend().get_title(), weight='bold')
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths.png')
+    plt.close()
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    # Create box plot
+    t_box = sns.boxplot(data=plot_stats, y='TAF Type', x='Mean TAF Length', 
+                        ax=ax)
+
+    # Formatting, etc
+    ax.set_xlabel('Mean TAF Length', weight='bold')
+    ax.set_ylabel('TAF Type', weight='bold')
+    ax.tick_params(axis='x', labelsize=15)
+    ax.tick_params(axis='y', labelsize=15)
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_box.png')
+    plt.close()
+
+
+def plot_wx(holders):
+    """
+    Plots bust info relating to sig wx codes.
+
+    Args:
+        holders (dict): Dictionaries to store data
+    Returns:
+        None
+    """
+    # Get stats dictionary
+    stats_abs = holders[f'wx_stats']
+
+    # Loop through all icaos
+    plot_stats = {}
+    for icao in stats_abs:
+
+        # Only get stats from required ICAOs
+        if icao not in cf.REQ_ICAO_STRS:
+            continue
+
+        # # Only get stats from required ICAOs
+        # if icao not in cf.NINE_HR_STRS:
+        #     continue
+
+        # Get stats for airport
+        stats = stats_abs[icao]
+
+        # Separate out reasons for bust and add to dictionary
+        for full_b_type, n_busts in stats.items():
+
+            # Get TAF and bust type and 
+            t_type = full_b_type[:2]
+            b_type = full_b_type[3:]
+
+            # Ignore 'all' types
+            if b_type == 'all':
+                continue
+
+            # Get full TAF type name
+            t_name = cf.TAF_TYPES[t_type]
+
+            # Add to stats dictionary
+            if b_type not in plot_stats:
+                plot_stats[b_type] = {tnm: 0 for tnm in cf.TAF_TYPES.values()}
+            plot_stats[b_type][t_name] += n_busts
+            
+    # Rearrange dictionary for a bar chart
+    bar_stats = {'TAF Type': [], 'Bust Type': [], 'Number of Busts': []}
+    for b_type, t_dict in plot_stats.items():
+        for t_name, n_busts in t_dict.items():
+            bar_stats['TAF Type'].append(t_name)
+            bar_stats['Bust Type'].append(b_type)
+            bar_stats['Number of Busts'].append(n_busts)
+
+    # Convert to dataframe
+    bar_df = pd.DataFrame(bar_stats)
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Create box plot
+    g_box = sns.barplot(data=bar_df, y='Bust Type', x='Number of Busts', 
+                        hue='TAF Type', ax=ax)
+
+    # Add scores on top of bars
+    for ind in ax.containers:
+        ax.bar_label(ind, fontsize=10)
+
+    # Formatting, etc
+    ax.set_xlabel('Bust Type', weight='bold')
+    ax.set_ylabel('Number of Busts', weight='bold')
+    ax.tick_params(axis='x', labelsize=15)
+    ax.tick_params(axis='y', labelsize=10)
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    plt.setp(g_box.get_legend().get_title(), weight='bold')
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{cf.D_DIR}/plots/wx_busts.png')
     plt.close()
 
 

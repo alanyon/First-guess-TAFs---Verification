@@ -56,15 +56,23 @@ TAF_TYPES = os.environ['TAF_TYPES'].split()
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 PLOT_TITLES = os.environ.get('PLOT_TITLES')
 TAF_TYPES_PLOT = json.loads(PLOT_TITLES)
+ML_FACTOR = float(os.environ['ML_FACTOR'])
 
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES_DICT.items()}
+TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 NUM_CATS = {'vis': 6, 'clb': 5}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
-TARGETS = {'clb_9': 0.517, 'clb_24': 0.468, 'clb_30': 0.457, 'vis_9': 0.426,
-           'vis_24': 0.345, 'vis_30': 0.366}
+TARGETS = {
+    'vis_9': [0.426, 'blue', '9-hr visibility target'],
+    'vis_24': [0.345, 'orange', '24-hr visibility target'],
+    'vis_30': [0.366, 'purple', '30-hr visibility target'],
+    'clb_9': [0.517, 'red', '9-hr cloud target'],
+    'clb_24': [0.468, 'green', '24-hr cloud target'],
+    'clb_30': [0.457, 'brown', '30-hr cloud target'],
+}
 MARKERS = ['o', 'v', 'P', 'X', 's', 'p', '*', 'D']
 SIZES = [50, 50, 60, 50, 50, 60, 80, 40]
 
@@ -174,18 +182,18 @@ def add_detail(ax, lim_min, lim_max, lim_diff, comb):
     ax.plot(lims, lims)
 
     # Add shading
-    ax.fill_between(lims, lims, lim_min, color='red', alpha=0.05)
-    ax.fill_between(lims, lims, lim_max, color='green', alpha=0.05)
+    ax.fill_between(lims, lims, lim_min, color='green', alpha=0.05)
+    ax.fill_between(lims, lims, lim_max, color='red', alpha=0.05)
 
     # Positions for extra text
     positions = [.05, .85, .68, .05]
-    fgx, fgy, isx, isy = [lim_min + pos * lim_diff for pos in positions]
+    mgx, mgy, asx, asy = [lim_min + pos * lim_diff for pos in positions]
 
     # Add extra text
-    ax.text(fgx, fgy, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
-            c='green', fontsize=15)
-    ax.text(isx, isy, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
+    ax.text(mgx, mgy, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
             c='red', fontsize=15)
+    ax.text(asx, asy, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
+            c='green', fontsize=15)
 
     return ax
 
@@ -258,7 +266,7 @@ def add_length_detail(ax, param, length, lim_min, lim_max, lim_diff, comb):
         ax (matplotlib.axes): Updated axis
     """
     # Add dashed target lines, shading and text for CAA targets
-    target = TARGETS[f'{param}_{length}']
+    target = TARGETS[f'{param}_{length}'][0]
     ax.axhline(y=target, linestyle='--', alpha=0.5)
     ax.axhspan(lim_min, target, alpha=0.03, color='r')
     ax.axhspan(target, lim_max, alpha=0.05, color='g')
@@ -325,19 +333,14 @@ def calc_min_obs(s_str, e_str):
     vdays = (edt - sdt).days * 0.2
 
     # Average of 2 TAFs per day required (2 obs per hour expected)
-    min_obs_30hr =  2 * 2 * 30 * vdays
-    min_obs_24hr =  2 * 2 * 24 * vdays
-    min_obs_9hr =  2 * 2 * 9 * vdays
-
-    # # TESTING ===================================
-    # min_obs_30hr =  0
-    # min_obs_24hr =  0
-    # min_obs_9hr =  0
+    min_obs_30hr =  2 * 2 * 30 * vdays * ML_FACTOR
+    min_obs_24hr =  2 * 2 * 24 * vdays * ML_FACTOR
+    min_obs_9hr =  2 * 2 * 9 * vdays * ML_FACTOR
 
     return min_obs_30hr, min_obs_24hr, min_obs_9hr
 
 
-def check_obs(stats_dict, row, req_obs):
+def check_obs(stats_dict, row, req_obs, total_tafs):
     """
     Checks number of matched obs to determine whether there is
     sufficient data for verification.
@@ -347,6 +350,7 @@ def check_obs(stats_dict, row, req_obs):
         row (list): List of values from csv file
         req_obs (list): List of required number of observations for each
                         TAF length
+        total_tafs (int): Total number of TAFs used in verification
     Returns:
         stats_dict (dict): Updated dictionary of stats
     """
@@ -358,10 +362,13 @@ def check_obs(stats_dict, row, req_obs):
     # Number of required obs depends on TAF length
     if row[0] in TAF_30HR:
         l_req_obs = req_obs[0]
+        num_tafs = num_obs / 60
     elif row[0] in TAF_24HR:
         l_req_obs = req_obs[1]
+        num_tafs = num_obs / 48
     elif row[0] in TAF_9HR:
         l_req_obs = req_obs[2]
+        num_tafs = num_obs / 18
     enough_obs = bool(num_obs >= l_req_obs)
 
     # If not enough data, print message
@@ -370,11 +377,13 @@ def check_obs(stats_dict, row, req_obs):
               f'{int(l_req_obs)} required')
     else:
         print(f'{row[0]} has enough obs ({int(num_obs)})')
+        print(f'  Number of TAFs: {int(num_tafs)}')
+        total_tafs += num_tafs
 
     # Add bool to dictionary based on whether number of obs meets requirements
     stats_dict[row[0]]['enough_obs'] = enough_obs
 
-    return stats_dict
+    return stats_dict, total_tafs
 
 
 def extract_data(stats_dict, key_1, key_2, cat, param):
@@ -432,7 +441,7 @@ def get_color_dict():
     airports = []
 
     # Open one of the csv files (doesn't matter which)
-    stats_file = f'{STATS_DIR}/vis_stats.csv'
+    stats_file = f'{STATS_DIR}/vis_stats_{TAF_TYPES_FNAME}.csv'
     with open(stats_file, encoding='utf-8') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
 
@@ -489,10 +498,13 @@ def get_stats(param, unc, req_obs):
                         TAF length
     """
     # Define stats file
-    stats_file = f'{STATS_DIR}/{param}_stats{unc}.csv'
+    stats_file = f'{STATS_DIR}/{param}_stats_{TAF_TYPES_FNAME}{unc}.csv'
 
     # Dictionary to add stats to
     stats_dict = {}
+
+    # For calculating total number of TAFs used
+    total_tafs = 0
 
     # Open csv file
     with open(stats_file, encoding='utf-8') as csv_file:
@@ -503,6 +515,10 @@ def get_stats(param, unc, req_obs):
 
             # Check if TAF in list of good TAFs
             if row[0] not in ALL_TAFS:
+                continue
+
+            # Only collect for required TAF types
+            if row[2] not in TAF_TYPES_INV:
                 continue
 
             # Get first part of key to add to dictionary
@@ -535,12 +551,17 @@ def get_stats(param, unc, req_obs):
                 # Check that airport has sufficient data (should be same
                 # number of obs in both types of TAF so only need to
                 # check one)
-                if f_key == 'i1':
-                    stats_dict = check_obs(stats_dict, row, req_obs)
+                if f_key == 'ma':
+                    stats_dict, total_tafs = check_obs(stats_dict, row, 
+                                                       req_obs, total_tafs)
 
     # Remove airports with insufficient data
     stats_dict = {key: value for key, value in stats_dict.items()
                   if value['enough_obs']}
+    
+    print('\n-------------------------------------')
+    print(f'Total number of {param} TAFs used: {total_tafs}')
+    print('-------------------------------------\n')
 
     # Return the dictionary of stats
     return stats_dict
@@ -646,10 +667,13 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
 
     # Set titles, legend, etc
     ax.set_title(title, fontsize=20, weight='bold')
-    ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}', fontsize=14)
-    ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}', fontsize=14)
-    ax.legend(loc='upper center', ncol=2, fontsize=12,
-              bbox_to_anchor=(1.45, 1.0))
+    ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}', fontsize=14,
+                  weight='bold')
+    ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}', fontsize=14,
+                  weight='bold')
+    if param == 'clb':
+        ax.legend(loc='upper center', ncol=2, fontsize=12,
+                  bbox_to_anchor=(1.5, 1.1))
 
     # Save and close figure
     fig.savefig(fname, bbox_inches='tight')
@@ -841,7 +865,8 @@ def sp_box_plot(stats_dict, param):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot.png')
+    fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
+                '9_hr.png')
     plt.close()
 
     return t_stats
@@ -854,7 +879,6 @@ def g_box_plot(all_stats):
 
     Args:
         stats_dict (dict): Dictionary of stats
-        param (str): Parameter to verify
     Returns:
         plot_stats (pd.DataFrame): DataFrame of Peirce Skill Scores for
                                    each category
@@ -898,7 +922,7 @@ def g_box_plot(all_stats):
     plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('XGBoost')]
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     # Create box plot
     g_box = sns.boxplot(data=plot_stats, x='Parameter', 
@@ -907,16 +931,35 @@ def g_box_plot(all_stats):
     # Add vertical line separating parameter
     ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
 
+    # Add dashed target lines, shading and text for CAA targets
+    target_handles = []
+    for t_type, target_vals in TARGETS.items():
+        target, colour, label = target_vals
+        if 'vis' in t_type: 
+            handle = ax.axhline(y=target, xmin=0, xmax=0.5, linestyle='--', 
+                                color=colour, alpha=0.7, label=label)
+        else:
+            handle = ax.axhline(y=target, xmin=0.5, xmax=1, linestyle='--', 
+                                color=colour, alpha=0.7, label=label)
+        target_handles.append(handle)
+
+    # Add target lines to legend
+    handles, labels = ax.get_legend_handles_labels()
+    handles += target_handles
+    # labels += [TARGETS[t_type][2] for t_type in TARGETS]
+    ax.legend(handles=handles, labels=labels, loc='upper center', ncol=2, 
+              fontsize=10, bbox_to_anchor=(1.45, 1.0))
+
     # Formatting, etc
     ax.set_xlabel('Parameter', weight='bold')
-    ax.set_ylabel('Sharpe GSS', weight='bold')
+    ax.set_ylabel('Gerrity Skill Score', weight='bold')
     ax.tick_params(axis='x', labelsize=15)
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
     plt.setp(g_box.get_legend().get_title(), weight='bold')
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/g_plots/g_box_plot.png')
+    fig.savefig(f'{STATS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
     plt.close()
 
     return t_stats

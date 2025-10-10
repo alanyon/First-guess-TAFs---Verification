@@ -14,6 +14,8 @@ DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
+TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
+TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 
 
 def print_ct(con_table):
@@ -143,7 +145,8 @@ def main(param, station, unc):
                         [val for val in ct_vals.flatten('F')])
 
         # Write stats to csv file
-        stats_file = '{}/{}_stats{}.csv'.format(STATS_DIR, param.lower(), unc)
+        stats_file = (f'{STATS_DIR}/{param.lower()}_stats_{TAF_TYPES_FNAME}'
+                      f'{unc}.csv')
         open_stats_file = open(stats_file, 'a')
         with open_stats_file:
 
