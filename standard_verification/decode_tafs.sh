@@ -27,8 +27,8 @@ for taf_type in ${TAF_TYPES}; do
         mkdir "${DECODE_DIR}/Output_${taf_type}"
     fi
 
-    # Inport TAFs
-    taf_files="${DATA_DIR}/tafs/*${taf_type}.txt"
+    # Import TAFs
+    taf_files="${DATA_DIR}/tafs/*${taf_type}*txt"
     cat ${taf_files} > ${DECODE_DIR}/Input_${taf_type}/tafs.txt
 
     # Convert TAFs into correct format and save to output directory
