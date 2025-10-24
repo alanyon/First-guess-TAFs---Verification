@@ -66,12 +66,12 @@ TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 NUM_CATS = {'vis': 6, 'clb': 5}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {
-    'vis_9': [0.426, 'blue', '9-hr visibility target'],
-    'vis_24': [0.345, 'orange', '24-hr visibility target'],
+    'vis_9': [0.408, 'blue', '9-hr visibility target'],
+    'vis_24': [0.357, 'orange', '24-hr visibility target'],
     'vis_30': [0.366, 'purple', '30-hr visibility target'],
-    'clb_9': [0.517, 'red', '9-hr cloud target'],
-    'clb_24': [0.468, 'green', '24-hr cloud target'],
-    'clb_30': [0.457, 'brown', '30-hr cloud target'],
+    'clb_9': [0.521, 'red', '9-hr cloud target'],
+    'clb_24': [0.467, 'green', '24-hr cloud target'],
+    'clb_30': [0.458, 'brown', '30-hr cloud target'],
 }
 MARKERS = ['o', 'v', 'P', 'X', 's', 'p', '*', 'D']
 SIZES = [50, 50, 60, 50, 50, 60, 80, 40]
