@@ -1,4 +1,10 @@
 #!/bin/bash -l
+#SBATCH --partition=cpu-long
+#SBATCH --mem=2G
+#SBATCH --ntasks=4
+#SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test.out
+#SBATCH --time=3000
+#SBATCH --error=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test.err
 
 # Load in constants 
 source setup_constants.sh
