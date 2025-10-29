@@ -225,7 +225,7 @@ def plot_cats(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/cats_covered.png')
+    fig.savefig(f'{cf.D_DIR}/plots/cats_covered_becmgs.png')
     plt.close()
 
 
@@ -267,7 +267,7 @@ def plot_dirs(holders):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/plots/{icao}/dir_busts.png'
+        img_fname = f'{cf.D_DIR}/plots/{icao}/dir_busts_becmgs.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -365,7 +365,7 @@ def plot_param(holders, param, summary_stats):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/plots/{icao}/{param}_busts.png'
+        img_fname = f'{cf.D_DIR}/plots/{icao}/{param}_busts_becmgs.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -403,7 +403,7 @@ def plot_summary(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/summary_busts.png')
+    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_becmgs.png')
     plt.close()
 
 
@@ -443,7 +443,7 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths.png')
+    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_becmgs.png')
     plt.close()
 
     # Create figure and axis
@@ -461,7 +461,7 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_box.png')
+    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_box_becmgs.png')
     plt.close()
 
 
@@ -543,7 +543,7 @@ def plot_wx(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/wx_busts.png')
+    fig.savefig(f'{cf.D_DIR}/plots/wx_busts_becmgs.png')
     plt.close()
 
 
