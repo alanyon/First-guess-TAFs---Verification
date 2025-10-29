@@ -13,7 +13,7 @@ def main():
     for t_type in TAF_TYPES:
 
         # Ignore operational file
-        if t_type == 'Manual':
+        if 'Manual' in t_type:
             continue
 
         # Define lines to write to config file
