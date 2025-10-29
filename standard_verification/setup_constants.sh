@@ -7,13 +7,13 @@ export DECODE_DIR=${DATA_DIR}/decodes
 # export TAF_TYPES="no_opt_old no_pes_old 2_opt_old 2_pes_old no_opt_new \
 #                   no_pes_new 2_opt_new 2_pes_new Manual"
 # export TAF_TYPES="no_pes_old no_pes_new Manual"
-export TAF_TYPES="no_pes_new Manual"
+export TAF_TYPES="no_pes_old no_pes_new Manual_ml"
 # export TAF_TYPES="no_pes no_opt 2_pes 2_opt Manual"
 # export TAF_TYPES_SHORT="o1 o2 o3 o4 n1 n2 n3 n4 ma"
 # export TAF_TYPES_SHORT="o2 n2 ma"
-export TAF_TYPES_SHORT="n2 ma"
+export TAF_TYPES_SHORT="o2 n2 ma"
 # export COMBS="o2n2 o2ma n2ma"
-export COMBS="n2ma"
+export COMBS="n2ma o2na"
 # export COMBS="map1 mao1 map2 mao2"
 # export PLOT_TITLES='{"o1": "Old Auto TAFs (optimistic)",
 #                      "o2": "Old Auto TAFs (pessimistic)",
@@ -24,11 +24,11 @@ export COMBS="n2ma"
 #                      "n3": "New Auto TAFs with\nobs (optimistic)",
 #                      "n4": "New Auto TAFs with\nobs (pessimistic)",
 #                      "ma": "Manual TAFs"}'
-export PLOT_TITLES='{"n2": "Auto TAFs",
-                     "ma": "Manual TAFs"}'
-# export PLOT_TITLES='{"o2": "Old Auto TAFs without\nobs (pessimistic)",
-#                      "n2": "New Auto TAFs without\nobs (pessimistic)",
+# export PLOT_TITLES='{"n2": "Auto TAFs",
 #                      "ma": "Manual TAFs"}'
+export PLOT_TITLES='{"o2": "Old Auto TAFs without\nobs (pessimistic)",
+                     "n2": "New Auto TAFs without\nobs (pessimistic)",
+                     "ma": "Manual TAFs"}'
 # export PLOT_TITLES='{"p1": "Auto TAFs without\nobs (pessimistic)",
 #                      "o1": "Auto TAFs without\nobs (optimistic)",
 #                      "p2": "Auto TAFs with\nobs (pessimistic)",
