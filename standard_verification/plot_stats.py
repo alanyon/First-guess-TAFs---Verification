@@ -866,7 +866,7 @@ def sp_box_plot(stats_dict, param):
     # Save and close figure
     plt.tight_layout()
     fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
-                '9_hr.png')
+                '.png')
     plt.close()
 
     return t_stats

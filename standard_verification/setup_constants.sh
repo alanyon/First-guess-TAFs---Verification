@@ -13,7 +13,7 @@ export TAF_TYPES="no_pes_old no_pes_new Manual_ml"
 # export TAF_TYPES_SHORT="o2 n2 ma"
 export TAF_TYPES_SHORT="o2 n2 ma"
 # export COMBS="o2n2 o2ma n2ma"
-export COMBS="n2ma o2na"
+export COMBS="n2ma o2n2"
 # export COMBS="map1 mao1 map2 mao2"
 # export PLOT_TITLES='{"o1": "Old Auto TAFs (optimistic)",
 #                      "o2": "Old Auto TAFs (pessimistic)",

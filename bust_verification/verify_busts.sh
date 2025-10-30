@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH --partition=cpu-long
-#SBATCH --mem=4G
+#SBATCH --mem=8G
 #SBATCH --ntasks=4
 #SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/bust_verification/test2.out
 #SBATCH --time=3000

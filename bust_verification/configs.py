@@ -17,7 +17,7 @@ TAF_TYPES = json.loads(PLOT_TITLES)
 # Accepted first guess TAFs
 AUTO_TAFS_LINES = []
 for t_str in T_STRS:
-    if t_str == 'Manual':
+    if 'Manual' in t_str:
         continue
     AUTO_TAFS_LINES.append(f'{D_DIR}/decodes/Output_{t_str}/acceptedTafs.csv')
 
