@@ -6,7 +6,7 @@ export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
 export TAF_TYPES="no_pes. no_pes_new_becmgs Manual"
 export TAF_TYPES_SHORT="c2 b2 ma"
-export COMBS="c2n2 c2ma b2ma"
+export COMBS="c2b2 c2ma b2ma"
 export PLOT_TITLES='{"c2": "Old Auto TAFs",
                      "b2": "New Auto TAFs",
                      "ma": "Manual TAFs"}'
