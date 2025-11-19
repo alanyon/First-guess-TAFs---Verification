@@ -64,6 +64,10 @@ TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES_DICT.items()}
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 NUM_CATS = {'vis': 6, 'clb': 5}
+CATS = {'vis': {1: '<=300m', 2: '350-750m', 3: '800-1400m', 4: '1500-4900m', 
+                5: '5000-9000m', 6: '>=10000m'},
+        'clb': {1: '<=100ft', 2: '200-400ft', 3: '500-900ft', 4: '1000-1400ft',
+                5: '>=1500ft'}}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {
     'vis_9': [0.408, 'blue', '9-hr visibility target'],
@@ -841,8 +845,11 @@ def sp_box_plot(stats_dict, param):
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
 
-    # Remove rows with XGBoost
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('XGBoost')]
+    # Map categories to names in CATS dictionary
+    plot_stats['Category'] = plot_stats['Category'].map(CATS[param])
+
+    # Remove rows with Random Forest
+    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -862,6 +869,7 @@ def sp_box_plot(stats_dict, param):
     ax.tick_params(axis='x', labelsize=15)
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
     plt.setp(sp_box.get_legend().get_title(), weight='bold')
+    plt.setp(ax.get_xticklabels(), fontsize=13)
 
     # Save and close figure
     plt.tight_layout()
@@ -918,8 +926,8 @@ def g_box_plot(all_stats):
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
 
-    # Remove rows with XGBoost
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('XGBoost')]
+    # Remove rows with Random Forest
+    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(8, 6))
