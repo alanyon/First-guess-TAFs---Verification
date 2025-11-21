@@ -1,14 +1,13 @@
 # This script sets up the constants for the verification process.
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20251004_ml
+VER_DATES=20230805-20251204_ml
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
-export TAF_TYPES="no_pes. no_pes_new_becmgs Manual"
-export TAF_TYPES_SHORT="c2 b2 ma"
-export COMBS="c2b2 c2ma b2ma"
-export PLOT_TITLES='{"c2": "Old Auto TAFs",
-                     "b2": "New Auto TAFs",
+export TAF_TYPES="no_pes_all Manual"
+export TAF_TYPES_SHORT="au ma"
+export COMBS="auma"
+export PLOT_TITLES='{"au": "Auto TAFs",
                      "ma": "Manual TAFs"}'
 export PYTHONPATH=~clare.bysouth/VerPy/stable
 export ORACLE_OWNER=oracle
@@ -31,10 +30,10 @@ export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGTE EGPO EGNH EGNR EGNC EGHC EGHE EGKA EGKB EGLF EGMC EGMD \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK "
 export VERIF_START=20230805
-export VERIF_END=20251005
+export VERIF_END=20251205
 MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
         202406 202407 202408 202409 202410 202411 202412 202501 202502 202503 \
-        202504 202505 202506 202507 202508 202509 202510"
+        202504 202505 202506 202507 202508 202509 202510 202511 202512"
 # Factor to address that in ML work, test data is 0.25 * full dataset 
 # (set to 1 otherwise)
 export ML_FACTOR=1
