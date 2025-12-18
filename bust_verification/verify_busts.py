@@ -61,9 +61,9 @@ def main(load_data):
     # Create directories if necessary
     ps.create_dirs()
 
-    # # Create spreadsheets
-    # # ps.write_to_excel(holders, 'wind')
-    # ps.write_to_excel(holders, 'all')
+    # Create spreadsheets
+    # ps.write_to_excel(holders, 'wind')
+    ps.write_to_excel(holders, 'all')
 
     # # Make plots
     # ps.plot_dirs(holders)
@@ -74,7 +74,7 @@ def main(load_data):
     ps.plot_param(holders, 'wind', summary_stats)
 
     # TESTING #
-    # Keep only total and significant weather bust types
+    # # Keep only total and significant weather bust types
     # summary_stats = pd.DataFrame(summary_stats)
     # summary_stats = summary_stats[summary_stats['Bust Type'].isin(
     #     ['Total\nvisibility busts', 'Significant\nweather busts', 

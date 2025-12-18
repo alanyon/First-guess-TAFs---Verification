@@ -61,7 +61,7 @@ REQ_ICAOS = [b'EGAA ', b'EGAC ', b'EGAE ', b'EGBB ', b'EGBJ ', b'EGCC ',
              b'EGNT ', b'EGNV ', b'EGNX ', b'EGPA ', b'EGPB ', b'EGPC ', 
              b'EGPD ', b'EGPE ', b'EGPF ', b'EGPH ', b'EGPI ', b'EGPK ', 
              b'EGPN ', b'EGPO ', b'EGPU ', b'EGSH ', b'EGSS ', b'EGTE ',
-             b'EGTK ']
+             b'EGTK ', b'EGHQ ']
 REQ_ICAO_STRS = {
     'EGAA': 'Belfast International', 'EGAC': 'Belfast City', 
     'EGAE': 'Londonderry', 'EGBB': 'Birmingham', 'EGBJ': 'Gloucester',
@@ -76,7 +76,7 @@ REQ_ICAO_STRS = {
     'EGPC': 'Wick', 'EGPD': 'Aberdeen', 'EGPE': 'Inverness', 'EGPF': 'Glasgow',
     'EGPH': 'Edinburgh', 'EGPI': 'Islay', 'EGPK': 'Prestwick', 
     'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
-    'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford'}
+    'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford', 'EGHQ': 'Newquay'}
 
 NINE_HR_STRS = {
     'EGAC': 'Belfast City', 'EGAE': 'Londonderry', 'EGBJ': 'Gloucester',
