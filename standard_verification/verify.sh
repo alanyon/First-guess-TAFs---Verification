@@ -65,7 +65,7 @@ done
 
 # Make some plots
 module unload scitools
-conda activate default_clone
+conda activate default_clone_nov_2025
 python plot_stats.py
 conda deactivate
 

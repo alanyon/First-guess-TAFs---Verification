@@ -14,8 +14,8 @@ export COMBS="o2x2 x2ma"
 #                      "r2": "New Auto TAFs\n(Random Forest)",
 #                      "x2": "New Auto TAFs",
 #                      "ma": "Manual TAFs"}'
-export PLOT_TITLES='{"o2": "Old Auto TAFs",
-                     "x2": "New Auto TAFs",
+export PLOT_TITLES='{"o2": "Auto TAFs (without ML)",
+                     "x2": "Auto TAFs (with ML)",
                      "ma": "Manual TAFs"}'
 export PYTHONPATH=~clare.bysouth/VerPy/stable
 export ORACLE_OWNER=oracle
@@ -31,7 +31,10 @@ export STATS_DIR=${DATA_DIR}/stats
 #                  EGLL EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX \
 #                  EGPA EGPB EGPC EGPD EGPE EGPF EGPH EGPI EGPK EGPL EGPN EGPO \
 #                  EGPU EGSC EGSH EGSS EGSY EGTC EGTE EGTK"
-export ALL_TAFS="EGHQ"
+export ALL_TAFS="EGGP EGGW EGHC EGHE EGHH EGHI EGKA EGKB EGKK EGLC EGLF \
+                 EGLL EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX \
+                 EGPA EGPB EGPC EGPD EGPE EGPF EGPH EGPI EGPK EGPL EGPN EGPO \
+                 EGPU EGSC EGSH EGSS EGSY EGTC EGTE EGTK"
 export TAF_30HR="EGCC EGLL EGKK EGSS"
 export TAF_24HR="EGAA EGGP EGNT EGPF EGNM EGPD EGPH EGFF EGNX EGBB EGCN EGGD \
                  EGGW EGPK EGLC"
