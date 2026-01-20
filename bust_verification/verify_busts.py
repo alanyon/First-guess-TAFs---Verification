@@ -500,6 +500,10 @@ def get_icao_metars(all_metars, icao):
             # Get METAR components needed for verification
             metar_comps = metar_list[8:]
 
+            # Ignore if format wrong
+            if 'EG' not in metar_comps[0]:
+                continue
+            
             # Ignore if no record or cancelled
             if 'NoRecord' in metar_comps:
                 continue
