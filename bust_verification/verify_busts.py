@@ -362,9 +362,12 @@ def get_day_man_tafs_metars(day):
     for icao in cf.REQ_ICAOS:
 
         # Get TAFs for ICAO
-        icao_tafs = all_tafs[all_tafs['ICAO_ID'] == icao]
-        icao_tafs = [str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()[8:]
-                     for taf in icao_tafs]
+        icao_tafs_raw = all_tafs[all_tafs['ICAO_ID'] == icao]
+        icao_tafs = []
+        for taf in icao_tafs_raw:
+            taf_list = str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()
+            taf_elmts = taf_list[taf_list.index(str(icao, 'utf-8').strip()):]
+            icao_tafs.append(taf_elmts)
 
         # Add to TAFs dictionary
         day_tafs[str(icao, 'utf-8').strip()] = icao_tafs
