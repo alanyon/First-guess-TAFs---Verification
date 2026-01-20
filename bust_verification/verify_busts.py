@@ -207,6 +207,9 @@ def day_icao_stats(month_stats, icao, man_tafs, metars):
     Returns:
         None
     """
+    # To keep track of TAFs used
+    used_tafs = []
+
     # Find TAF with correct timings
     for taf_info in man_tafs:
 
@@ -227,7 +230,20 @@ def day_icao_stats(month_stats, icao, man_tafs, metars):
             continue
 
         # Get start and end times of TAF
-        start, end = ConstructTimeObject(taf[2], day, month, year).TAF()
+        try:
+            start, end = ConstructTimeObject(taf[2], day, month, year).TAF()
+        except Exception as e:
+            print(f'Error: {e}')
+            print(f'Problem with TAF time: {taf}')
+            continue
+
+        # Create TAF identifier, based on ICAO and start time
+        taf_id = f'{icao}_{start.strftime("%Y%m%d%H%M")}'
+
+        # Skip if TAF time already used
+        if taf_id in used_tafs:
+            continue
+        used_tafs.append(taf_id)
 
         # Get all METARs valid for TAF period
         v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
