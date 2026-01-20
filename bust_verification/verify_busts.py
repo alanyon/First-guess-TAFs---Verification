@@ -53,37 +53,16 @@ def main(load_data):
     """
     # Get dictionaries, etc, to store data, either from pickled files or
     # create new empty ones
-    holders = get_holders(load_data)
+    stats = {'Month': [], 'Visibility Busts': [], 
+             'Cloud Busts': [], 'Wind Busts': [], 'Weather Busts': [], 
+             'Number of METARs': [], 'Number of Amends': [], 
+             'Number of Corrections': []}
 
     # Get new data and add to data holders
-    get_new_data(holders, load_data)
+    get_new_data(stats)
 
     # Create directories if necessary
     ps.create_dirs()
-
-    # # Create spreadsheets
-    # # ps.write_to_excel(holders, 'wind')
-    # ps.write_to_excel(holders, 'all')
-
-    # # Make plots
-    # ps.plot_dirs(holders)
-    summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
-    ps.plot_param(holders, 'vis', summary_stats)
-    ps.plot_param(holders, 'wx', summary_stats)
-    ps.plot_param(holders, 'cld', summary_stats)
-    ps.plot_param(holders, 'wind', summary_stats)
-
-    # TESTING #
-    # # Keep only totals and significant weather bust types
-    # summary_stats = pd.DataFrame(summary_stats)
-    # summary_stats = summary_stats[summary_stats['Bust Type'].isin(
-    #     ['Total\nvisibility busts', 'Significant\nweather busts', 
-    #      'Total\ncloud busts', 'Total\nwind busts'])]
-
-    ps.plot_summary(summary_stats)
-    # ps.plot_wx(holders)
-    ps.plot_taf_lens(holders)
-    ps.plot_cats(holders)
 
 
 def add_cats(holders, s_type, icao, cats, t_type, w_type):
@@ -204,7 +183,8 @@ def count_busts(taf, metars, icao, start, end):
     """
     # Try to find busts
     try:
-        busts, cats_covered = CheckTafThread(icao, start, end, taf, metars).run()
+        busts, cats_covered = CheckTafThread(icao, start, end, taf, 
+                                             metars).run()
 
     # If any issues, assume TAF is bad and print error out to check
     except Exception as e:
@@ -215,82 +195,52 @@ def count_busts(taf, metars, icao, start, end):
     return busts, cats_covered
 
 
-def day_icao_stats(holders, icao, man_tafs, metars):
+def day_icao_stats(month_stats, icao, man_tafs, metars):
     """
     Gets day stats for ICAO and adds to holders dictionary.
 
     Args:
         holders (dict): Dictionaries to store data
         icao (str): ICAO to get stats for
-        man_tafs (list): List of manual TAFs
+        man_tafs (list): List of manual TAFs with month and year info
         metars (list): List of METARs
     Returns:
         None
     """
     # Find TAF with correct timings
-    for man_taf in man_tafs:
+    for taf_info in man_tafs:
 
-        print('man_taf', man_taf)
+        # Get TAF and validity datetime
+        taf = taf_info['taf']
+        day = taf_info['day']
+        month = taf_info['month']
+        year = taf_info['year']
+        amend = taf_info['amend']
+        correction = taf_info['correction']
 
-        # Get validity datetime of TAF
-        vdt = (datetime.strptime(man_taf[4], '%d-%b-%y') 
-               + timedelta(hours=int(man_taf[5][:2])))
-        
-        print('man_taf', man_taf)
-        print('vdt', vdt)
-        exit()
+        # Add to amends and corrections counts
+        if amend:
+            month_stats['num_amends'] += 1
+            continue
+        if correction:
+            month_stats['num_corrections'] += 1
+            continue
 
         # Get start and end times of TAF
-        taf_day = int(taf[2][:2])
-        a_start, a_end = ConstructTimeObject(taf[2], taf_day,
-                                            vdt.month, vdt.year).TAF()
-
-        # Attempt to match TAFs and get TAFs start/end times
-        start, end, match = get_taf_times(man_taf, vdt, a_start, a_end,
-                                            a_tafs[0])
-
-        # Move on if TAFs don't match
-        if not match:
-            continue
+        start, end = ConstructTimeObject(taf[2], day, month, year).TAF()
 
         # Get all METARs valid for TAF period
         v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
 
-        # Count busts and cats covered for all TAF types
-        all_tafs = [*a_tafs, man_taf]
-        all_busts, all_cats_covered = [], []
-        for taf in all_tafs:
-            busts, cats_covered = count_busts(taf, v_metars, icao, start,
-                                                end)
-            all_busts.append(busts)
-            all_cats_covered.append(cats_covered)
+        # Count busts
+        busts, _ = count_busts(taf, v_metars, icao, start, end)
 
         # Move on if bad TAF found
-        if any(busts is None for busts in all_busts):
+        if busts is None:
             continue
 
-        # Number of METARs expected during TAF period
-        num_float = (end - start).total_seconds() / 1800
-        holders['metars_used'][icao] += int(np.round(num_float))
-
-        # Collect into dictionaries
-        vc_busts = dict(zip(cf.TAF_TYPES, all_busts))
-        vc_cats = dict(zip(cf.TAF_TYPES, all_cats_covered))
-        vc_tafs = dict(zip(cf.TAF_TYPES, all_tafs))
-
-        # Add to all stats dictionaries
-        update_stats(holders, vc_busts, vc_cats, icao)
-            
-        # Add to all info dictionaries
-        update_infos(holders, icao, vc_tafs, vc_busts)
-
-        # Get TAF lengths
-        for t_type, taf in vc_tafs.items():
-            taf_length = get_taf_length(taf)
-            holders['taf_lens'][icao][t_type].append(taf_length)
-
-        # Break for loop so only one TAF is used
-        break
+        for w_type in ['wind', 'visibility', 'cloud', 'weather', 'all']:
+            month_stats[f'{w_type}_busts'] += len(busts[w_type])
 
 
 def get_day_man_tafs_metars(day):
@@ -316,7 +266,9 @@ def get_day_man_tafs_metars(day):
                          keywords=['PLATFORM EG',
                                    f'START TIME {start_times[0]}Z',
                                    f'END TIME {end_times[0]}Z'],
-                         elements=['ICAO_ID', 'TAF_RPT_TXT'])
+                         elements=['ICAO_ID', 'TAF_RPT_TXT', 'YR', 'MON', 
+                                   'DAY', 'FCST_BGN_DAY', 'AMND_NUM', 
+                                   'COR_NUM'])
 
     # Get METARs for all possible times TAFs cover (3 days)
     all_metars = [metdb.obs(cf.METDB_EMAIL, 'METARS',
@@ -340,13 +292,12 @@ def get_day_man_tafs_metars(day):
 
         # Get TAFs for ICAO
         icao_tafs = all_tafs[all_tafs['ICAO_ID'] == icao]
-        print('icao_tafs', icao_tafs[0], icao_tafs[-1])
-        print('')
-        icao_tafs = [str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()[8:]
-                     for taf in icao_tafs]
+
+        # Get TAFs and validity datetimes
+        tafs_infos = get_tafs_infos(icao_tafs, icao)
 
         # Add to TAFs dictionary
-        day_tafs[str(icao, 'utf-8').strip()] = icao_tafs
+        day_tafs[str(icao, 'utf-8').strip()] = tafs_infos
 
         # Get METARs and SPECIs for ICAO
         icao_metars = get_icao_metars(all_metars, icao)
@@ -360,8 +311,6 @@ def get_day_man_tafs_metars(day):
 
         # Add to METARs dictionary
         day_3_metars[str(icao, 'utf-8').strip()] = new_icao_metars
-
-    exit()
 
     return day_tafs, day_3_metars
 
@@ -395,63 +344,6 @@ def get_day_tafs(day, tafs_lines):
     return day_tafs
 
 
-def get_holders(load_data):
-    """
-    Returns dictionaries to store data, either from pickled files or
-    new empty ones.
-
-    Args:
-        load_data (str): 'yes' to load from pickled files, 'no' to start
-                         from scratch.
-    Returns:
-        holders (dict): Dictionaries to store data.
-    """
-    # Load in pickled data if required
-    if load_data != 'yes':
-        return {name: uf.unpickle_data(f'{cf.D_DIR}/pickles/{name}')
-                for name in cf.NAMES}
-
-    # Otherwise, create empty dictionaries
-    wind_template = {icao: [] for icao in cf.REQ_ICAO_STRS}
-    wind_info, vis_info, cld_info, wx_info, all_info = (
-        deepcopy(wind_template) for _ in range(5)
-    )
-    wind_template = {f'{t_type} {b_type}': 0 for t_type in cf.TAF_TYPES
-                     for b_type in cf.WB_TYPES}
-    wind_stats = {icao: deepcopy(wind_template) for icao in cf.REQ_ICAO_STRS}
-    vis_cld_template = {f'{t_type} {b_type}': 0 for t_type in cf.TAF_TYPES
-                        for b_type in cf.B_TYPES}
-    vis_stats = {icao: deepcopy(vis_cld_template) for icao in cf.REQ_ICAO_STRS}
-    cld_stats = {icao: deepcopy(vis_cld_template) for icao in cf.REQ_ICAO_STRS}
-    wx_stats = {icao: {f'{t_type} all': 0 for t_type in cf.TAF_TYPES}
-                for icao in cf.REQ_ICAO_STRS}
-    simple_template = {f'{t_type}': [] for t_type in cf.TAF_TYPES}
-    vis_cats = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
-    cld_cats = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
-    taf_lens = {icao: deepcopy(simple_template) for icao in cf.REQ_ICAO_STRS}
-    all_template = {f'{t_type} {w_type}': 0 for t_type in cf.TAF_TYPES
-                    for w_type in cf.W_NAMES}
-    all_stats = {icao: deepcopy(all_template) for icao in cf.REQ_ICAO_STRS}
-    dirs_template = {'N': 0, 'E': 0, 'S': 0, 'W': 0, 'VRB': 0}
-    dirs_stats = {f'{t_type} dirs': {icao: {b_type: deepcopy(dirs_template)
-                                     for b_type in cf.D_TYPES}
-                                     for icao in cf.REQ_ICAO_STRS}
-                  for t_type in cf.TAF_TYPES}
-    metars_used = {icao: 0 for icao in cf.REQ_ICAO_STRS}
-    last_day = cf.DAYS[0] - timedelta(days=1)
-
-    # Collect all data into a dictionary
-    holders = {
-        'wind_info': wind_info, 'vis_info': vis_info, 'cld_info': cld_info,
-        'wx_info': wx_info, 'all_info': all_info, 'wind_stats': wind_stats,
-        'vis_stats': vis_stats, 'cld_stats': cld_stats, 'wx_stats': wx_stats,
-        'all_stats': all_stats, 'vis_cats': vis_cats, 'cld_cats': cld_cats,
-        'taf_lens': taf_lens, 'dirs_stats': dirs_stats,
-        'metars_used': metars_used, 'last_day': last_day}
-
-    return holders
-
-
 def get_icao_metars(all_metars, icao):
     """
     Returns dictionary of METARs for specified ICAO.
@@ -474,9 +366,11 @@ def get_icao_metars(all_metars, icao):
 
             # Convert METAR text to list
             metar_list = str(metar['MTR_RPT_TXT'], 'utf-8').strip().split()
-
-            # Get METAR components needed for verification
             metar_comps = metar_list[8:]
+
+            # Ignore if format wrong
+            if 'EG' not in metar_comps[0]:
+                continue
 
             # Ignore if no record or cancelled
             if 'NoRecord' in metar_comps:
@@ -494,7 +388,7 @@ def get_icao_metars(all_metars, icao):
     return icao_metars
 
 
-def get_new_data(holders, load_data):
+def get_new_data(stats):
     """
     Extracts TAFs and METARs and compares them, collecting bust
     information.
@@ -506,22 +400,35 @@ def get_new_data(holders, load_data):
     Returns:
         None
     """
-    # If last day already reached, don't need to do anything
-    if holders['last_day'] == cf.END_DT or load_data == 'no':
-        return
-
     # Loop though all days in period
+    month_stats = {'visibility_busts': 0, 'cloud_busts': 0, 'wind_busts': 0,
+                   'weather_busts': 0, 'all_busts': 0, 'num_metars': 0, 
+                   'num_amends': 0, 'num_corrections': 0}
+    current_month = cf.DAYS[0].strftime('%Y-%m')
     for day in cf.DAYS:
 
         # Print for info of progress
         print(day)
 
-        # If day already processed, move to next day
-        if day <= holders['last_day']:
-            continue
-
-        # Update last day processed
-        holders['last_day'] = day
+        month = day.strftime('%Y-%m')
+        if month != current_month:
+            stats['Month'].append(current_month)
+            stats['Visibility Busts'].append(month_stats['visibility_busts'])
+            stats['Cloud Busts'].append(month_stats['cloud_busts'])
+            stats['Wind Busts'].append(month_stats['wind_busts'])
+            stats['Weather Busts'].append(month_stats['weather_busts'])
+            stats['Number of METARs'].append(month_stats['num_metars'])
+            stats['Number of Amends'].append(month_stats['num_amends'])
+            stats['Number of Corrections'].append(month_stats['num_corrections'])
+            current_month = month
+            month_stats = {'visibility_busts': 0, 'cloud_busts': 0,
+                           'wind_busts': 0, 'weather_busts': 0, 'all_busts': 0, 
+                           'num_metars': 0, 'num_amends': 0, 
+                           'num_corrections': 0}
+            
+            # Pickle stats so far
+            print(stats)
+            uf.pickle_data(stats, f'{cf.D_DIR}/stats.pkl')
 
         # Get all TAFs and METARs for day (3 days for METARs to cover
         # TAF periods)
@@ -530,16 +437,13 @@ def get_new_data(holders, load_data):
         except:
             print(f'problem retrieving for day: {day}')
             continue
-
         # Loop through required ICAOs
         for icao in cf.REQ_ICAO_STRS:
 
             # Get day stats for ICAO
-            day_icao_stats(holders, icao, man_tafs[icao], metars[icao])
+            day_icao_stats(month_stats, icao, man_tafs[icao], metars[icao])
 
-        # Pickle at the end of each day in case something breaks
-        for name, data in holders.items():
-            uf.pickle_data(data, f'{cf.D_DIR}/pickles/{name}')
+    print(stats)
 
 
 def get_taf_length(taf):
@@ -623,6 +527,35 @@ def get_taf_times(man_taf, vdt, a_start, a_end, a_taf):
     start, end = a_start, a_end
 
     return start, end, True
+
+
+def get_tafs_infos(tafs, icao):
+
+    tafs_infos = []
+    for taf in tafs:
+
+        # Get TAF elements
+        taf_list = str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()
+        taf_elmts = taf_list[taf_list.index(str(icao, 'utf-8').strip()):]
+
+        # Get issue day of TAF
+        issue_day = datetime(year=taf['YR'], month=taf['MON'],
+                             day=taf['DAY'])
+
+        # Get validity day of TAF (carefully with month changeovers)
+        if taf['FCST_BGN_DAY'] < taf['DAY']:
+            v_day = issue_day + timedelta(days=1)
+        else:
+            v_day = issue_day
+
+        # Define month and year of TAF start and add to list
+        taf_info = {'taf': taf_elmts, 'day': taf['FCST_BGN_DAY'],
+                    'month': v_day.month, 'year': v_day.year, 
+                    'amend': bool(taf['AMND_NUM']), 
+                    'correction': bool(taf['COR_NUM'])}
+        tafs_infos.append(taf_info)
+
+    return tafs_infos
 
 
 def update_infos(holders, icao, vc_tafs, vc_busts):
