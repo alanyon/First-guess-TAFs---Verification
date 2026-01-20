@@ -4,16 +4,9 @@
 VER_DATES=20230805-20251204_ml
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
-# export TAF_TYPES="no_pes_old random_forest_no_pes_new xgboost_no_pes_new \
-#                   Manual_ml"
-export TAF_TYPES="no_pes_old xgboost_no_pes_new Manual_ml"
-# export TAF_TYPES_SHORT="o2 r2 x2 ma"
+export TAF_TYPES="no_old xgboost_no_new Manual_ml"
 export TAF_TYPES_SHORT="o2 x2 ma"
 export COMBS="o2x2 x2ma"
-# export PLOT_TITLES='{"o2": "Old Auto TAFs",
-#                      "r2": "New Auto TAFs\n(Random Forest)",
-#                      "x2": "New Auto TAFs",
-#                      "ma": "Manual TAFs"}'
 export PLOT_TITLES='{"o2": "Auto TAFs (without ML)",
                      "x2": "Auto TAFs (with ML)",
                      "ma": "Manual TAFs"}'
@@ -26,12 +19,8 @@ export ORACLE_HOME=/usr/lib/oracle/23/client64
 export SHLIB_PATH=/usr/lib/oracle/23/client64/lib
 export PATH=$PATH:/usr/lib/oracle/23/client64/bin
 export STATS_DIR=${DATA_DIR}/stats
-# export ALL_TAFS="EGAA EGAC EGAE EGBB EGBJ EGCC EGCK EGCN EGEC EGEO EGFF EGGD \
-#                  EGGP EGGW EGHC EGHE EGHH EGHI EGHQ EGKA EGKB EGKK EGLC EGLF \
-#                  EGLL EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX \
-#                  EGPA EGPB EGPC EGPD EGPE EGPF EGPH EGPI EGPK EGPL EGPN EGPO \
-#                  EGPU EGSC EGSH EGSS EGSY EGTC EGTE EGTK"
-export ALL_TAFS="EGGP EGGW EGHC EGHE EGHH EGHI EGKA EGKB EGKK EGLC EGLF \
+export ALL_TAFS="EGAA EGAC EGAE EGBB EGBJ EGCC EGCK EGCN EGEC EGEO EGFF EGGD \
+                 EGGP EGGW EGHC EGHE EGHH EGHI EGHQ EGKA EGKB EGKK EGLC EGLF \
                  EGLL EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX \
                  EGPA EGPB EGPC EGPD EGPE EGPF EGPH EGPI EGPK EGPL EGPN EGPO \
                  EGPU EGSC EGSH EGSS EGSY EGTC EGTE EGTK"

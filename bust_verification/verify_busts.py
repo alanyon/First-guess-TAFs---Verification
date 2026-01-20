@@ -533,7 +533,7 @@ def get_new_data(holders, load_data):
     auto_tafs_lines = [get_taf_lines(fname) for fname in cf.AUTO_TAFS_LINES]
 
     # Loop though all days in period
-    for day in cf.DAYS[:100]:
+    for day in cf.DAYS:
 
         # Print for info of progress
         print(day)
