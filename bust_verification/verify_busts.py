@@ -215,105 +215,82 @@ def count_busts(taf, metars, icao, start, end):
     return busts, cats_covered
 
 
-def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
+def day_icao_stats(holders, icao, man_tafs, metars):
     """
     Gets day stats for ICAO and adds to holders dictionary.
 
     Args:
         holders (dict): Dictionaries to store data
         icao (str): ICAO to get stats for
-        auto_tafs (list): List of lists of auto TAFs
         man_tafs (list): List of manual TAFs
         metars (list): List of METARs
     Returns:
         None
     """
-    # Get TAFs for ICAO
-    icao_auto_tafs = [[row for row in tafs if icao in row]
-                      for tafs in auto_tafs]
+    # Find TAF with correct timings
+    for man_taf in man_tafs:
 
-    # Loop through all IMPROVER TAFs for ICAO
-    for auto_taf_rows in itertools.product(*icao_auto_tafs):
+        print('man_taf', man_taf)
 
-        # Get required TAF variables
-        a_vdts = [datetime.strptime(row[4], '%d-%b-%y') +
-                  timedelta(hours=int(row[5][:2])) for row in auto_taf_rows]
-        a_tafs = [row[10][46:].split() for row in auto_taf_rows]
+        # Get validity datetime of TAF
+        vdt = (datetime.strptime(man_taf[4], '%d-%b-%y') 
+               + timedelta(hours=int(man_taf[5][:2])))
+        
+        print('man_taf', man_taf)
+        print('vdt', vdt)
+        exit()
 
-        # Continue to next iteration if wrong validity time
-        if not all(vdt == a_vdts[0] for vdt in a_vdts):
+        # Get start and end times of TAF
+        taf_day = int(taf[2][:2])
+        a_start, a_end = ConstructTimeObject(taf[2], taf_day,
+                                            vdt.month, vdt.year).TAF()
+
+        # Attempt to match TAFs and get TAFs start/end times
+        start, end, match = get_taf_times(man_taf, vdt, a_start, a_end,
+                                            a_tafs[0])
+
+        # Move on if TAFs don't match
+        if not match:
             continue
 
-        # Now vdts must be the same
-        vdt = a_vdts[0]
+        # Get all METARs valid for TAF period
+        v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
 
-        # Get start and end times of auto TAFs
-        a_starts, a_ends = [], []
-        for taf in a_tafs:
-            taf_day = int(taf[2][:2])
-            a_start, a_end = ConstructTimeObject(taf[2], taf_day,
-                                             vdt.month, vdt.year).TAF()
-            a_starts.append(a_start)
-            a_ends.append(a_end)
+        # Count busts and cats covered for all TAF types
+        all_tafs = [*a_tafs, man_taf]
+        all_busts, all_cats_covered = [], []
+        for taf in all_tafs:
+            busts, cats_covered = count_busts(taf, v_metars, icao, start,
+                                                end)
+            all_busts.append(busts)
+            all_cats_covered.append(cats_covered)
 
-        # Starts and ends of all auto TAFs need to be the same
-        if not all(a_start == a_starts[0] for a_start in a_starts):
-            continue
-        if not all(a_end == a_ends[0] for a_end in a_ends):
+        # Move on if bad TAF found
+        if any(busts is None for busts in all_busts):
             continue
 
-        # Get start and end times of TAFs must be the same
-        a_start, a_end = a_starts[0], a_ends[0]
+        # Number of METARs expected during TAF period
+        num_float = (end - start).total_seconds() / 1800
+        holders['metars_used'][icao] += int(np.round(num_float))
 
-        # Find TAF with correct timings
-        for man_taf in man_tafs:
+        # Collect into dictionaries
+        vc_busts = dict(zip(cf.TAF_TYPES, all_busts))
+        vc_cats = dict(zip(cf.TAF_TYPES, all_cats_covered))
+        vc_tafs = dict(zip(cf.TAF_TYPES, all_tafs))
 
-            # Attempt to match TAFs and get TAFs start/end times
-            start, end, match = get_taf_times(man_taf, vdt, a_start, a_end,
-                                              a_tafs[0])
+        # Add to all stats dictionaries
+        update_stats(holders, vc_busts, vc_cats, icao)
+            
+        # Add to all info dictionaries
+        update_infos(holders, icao, vc_tafs, vc_busts)
 
-            # Move on if TAFs don't match
-            if not match:
-                continue
+        # Get TAF lengths
+        for t_type, taf in vc_tafs.items():
+            taf_length = get_taf_length(taf)
+            holders['taf_lens'][icao][t_type].append(taf_length)
 
-            # Get all METARs valid for TAF period
-            v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
-
-            # Count busts and cats covered for all TAF types
-            all_tafs = [*a_tafs, man_taf]
-            all_busts, all_cats_covered = [], []
-            for taf in all_tafs:
-                busts, cats_covered = count_busts(taf, v_metars, icao, start,
-                                                  end)
-                all_busts.append(busts)
-                all_cats_covered.append(cats_covered)
-
-            # Move on if bad TAF found
-            if any(busts is None for busts in all_busts):
-                continue
-
-            # Number of METARs expected during TAF period
-            num_float = (end - start).total_seconds() / 1800
-            holders['metars_used'][icao] += int(np.round(num_float))
-
-            # Collect into dictionaries
-            vc_busts = dict(zip(cf.TAF_TYPES, all_busts))
-            vc_cats = dict(zip(cf.TAF_TYPES, all_cats_covered))
-            vc_tafs = dict(zip(cf.TAF_TYPES, all_tafs))
-
-            # Add to all stats dictionaries
-            update_stats(holders, vc_busts, vc_cats, icao)
-                
-            # Add to all info dictionaries
-            update_infos(holders, icao, vc_tafs, vc_busts)
-
-            # Get TAF lengths
-            for t_type, taf in vc_tafs.items():
-                taf_length = get_taf_length(taf)
-                holders['taf_lens'][icao][t_type].append(taf_length)
-
-            # Break for loop so only one TAF is used
-            break
+        # Break for loop so only one TAF is used
+        break
 
 
 def get_day_man_tafs_metars(day):
@@ -363,6 +340,8 @@ def get_day_man_tafs_metars(day):
 
         # Get TAFs for ICAO
         icao_tafs = all_tafs[all_tafs['ICAO_ID'] == icao]
+        print('icao_tafs', icao_tafs[0], icao_tafs[-1])
+        print('')
         icao_tafs = [str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()[8:]
                      for taf in icao_tafs]
 
@@ -381,6 +360,8 @@ def get_day_man_tafs_metars(day):
 
         # Add to METARs dictionary
         day_3_metars[str(icao, 'utf-8').strip()] = new_icao_metars
+
+    exit()
 
     return day_tafs, day_3_metars
 
@@ -529,9 +510,6 @@ def get_new_data(holders, load_data):
     if holders['last_day'] == cf.END_DT or load_data == 'no':
         return
 
-    # Read in IMPROVER TAFs files
-    auto_tafs_lines = [get_taf_lines(fname) for fname in cf.AUTO_TAFS_LINES]
-
     # Loop though all days in period
     for day in cf.DAYS:
 
@@ -545,14 +523,6 @@ def get_new_data(holders, load_data):
         # Update last day processed
         holders['last_day'] = day
 
-        # Find all IMPROVER TAFs valid on this day
-        auto_tafs = [get_day_tafs(day, lines) for lines in auto_tafs_lines]
-
-
-        # If no TAFs found, move to next day
-        if not all(auto_tafs):
-            continue
-
         # Get all TAFs and METARs for day (3 days for METARs to cover
         # TAF periods)
         try:
@@ -565,8 +535,7 @@ def get_new_data(holders, load_data):
         for icao in cf.REQ_ICAO_STRS:
 
             # Get day stats for ICAO
-            day_icao_stats(holders, icao, auto_tafs, man_tafs[icao],
-                           metars[icao])
+            day_icao_stats(holders, icao, man_tafs[icao], metars[icao])
 
         # Pickle at the end of each day in case something breaks
         for name, data in holders.items():
