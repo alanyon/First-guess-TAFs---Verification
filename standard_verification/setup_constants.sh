@@ -4,7 +4,7 @@
 VER_DATES=20230805-20251204_ml
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
-export TAF_TYPES="no_old xgboost_no_new Manual_ml"
+export TAF_TYPES="no_pes_old xgboost_no_pes_new Manual_ml"
 export TAF_TYPES_SHORT="o2 x2 ma"
 export COMBS="o2x2 x2ma"
 export PLOT_TITLES='{"o2": "Auto TAFs (without ML)",
