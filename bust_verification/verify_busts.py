@@ -1,171 +1,114 @@
 """
-Script to count number of TAF busts, calculate statistics and output
-plots and spreadsheets.
+Script to count number of TAF busts and amends and create some plots.
 
 Functions:
-    main: Main function calling all other functions.
-    add_stats: Adds bust stats to appropriate lists in dictionaries.
-    count_busts: Counts the number of busts in a TAF.
-    get_day_man_tafs_metars: Extracts manual TAFs and METARs.
-    get_day_tafs: Extracts all TAFs issued on specified day.
-    get_holders: Returns dictionaries to store data.
-    get_icao_metars: Returns dictionary of METARs for specified ICAO.
-    get_new_data: Extracts TAFs and METARs and compares them.
-    get_taf_lines: Reads in TAFs from file.
-    get_taf_times: Checks if TAFs match and returns start and end times.
-    taf_str: Converts TAF in list format to and easily readable string.
-    update_infos: Updates info dictionaries.
-    update_stats: Updates stats dictionaries.
+    main: Main function to extract data and create plots
+    amds_corrs: Get amends and corrections counts for ICAO
+    count_busts: Count number of busts in TAF
+    day_icao_stats: Get day stats for ICAO
+    get_day_man_tafs_metars: Extract manual TAFs and METARs for day
+    get_icao_metars: Returns dictionary of METARs for specified ICAO
+    get_new_data: Extracts TAFs and METARs amend and bust information
+    get_tafs_infos: Returns list of TAFs with month and year info
+    line_plot: Creates line plot of specified stats
+    plot_amends_total: Plots total amends for each month
+    plot_busts: Plots busts for each month
+    plot_amends_airports: Plots amends for each airport
+    
 
 Written by Andre Lanyon.
 """
-import itertools
 import sys
 from copy import deepcopy
 from datetime import datetime, timedelta
 
 import metdb
 import pandas as pd
-import numpy as np
 import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import useful_functions as uf
 from taf_monitor.checking import CheckTafThread
 from taf_monitor.time_functionality import ConstructTimeObject
 
 import configs as cf
-import plots_and_spreadsheets as ps
 
 # Set plotting style
 sns.set_style('darkgrid')
 sns.set(font_scale=1.5)
+pd.set_option('display.max_columns', None)
 
 
-def main(load_data):
+def main(new_data):
     """
     Extracts TAFs and METARs and compares them, collecting bust
     information.
 
     Args:
-        load_data (str): 'yes' to load from pickled files, 'no' to start
-                         from scratch.
+        new_data (str): 'yes' to load from pickled files, 'no' to start
+                         from scratch, 'add' to add to existing data.
     Returns:
         None
     """
-    # Get dictionaries, etc, to store data, either from pickled files or
-    # create new empty ones
-    stats = {'Month': [], 'Visibility Busts': [], 
-             'Cloud Busts': [], 'Wind Busts': [], 'Weather Busts': [], 
-             'Number of METARs': [], 'Number of Amends': [], 
-             'Number of Corrections': []}
+    # Extracting data takes ages
+    if new_data == 'yes':
 
-    # Get new data and add to data holders
-    get_new_data(stats)
+        # Get dictionaries, etc, to store data, either from pickled files or
+        # create new empty ones
+        stats = {
+            'Month': [], 'Start Hour': [], 'Airport': [], 'TAF Length': [],
+            'Visibility Busts': [], 'Cloud Busts': [], 'Wind Busts': [], 
+            'Weather Busts': [], 'All Busts': [], 'Number of METARs': [], 
+            'Number of Amends': [], 'Number of Corrections': []
+        }
+        
+        # Get new data and add to data holders
+        get_new_data(stats)
 
-    # Create directories if necessary
-    ps.create_dirs()
+    # Unpickle stats dictionary
+    stats = uf.unpickle_data(f'{cf.D_DIR}/stats.pkl')
 
+    # Add to stats if required
+    if new_data == 'add':
+        get_new_data(stats)
 
-def add_cats(holders, s_type, icao, cats, t_type, w_type):
+    # Convert to DataFrame
+    stats_df = pd.DataFrame(stats)
+    stats_df['Month'] = pd.to_datetime(stats_df['Month'], format='%Y-%m')
+
+    # Create plots
+    plot_amends_total(stats_df)
+    plot_amends_airports(stats_df)
+    plot_busts(stats_df, 'Bust Type')
+    plot_busts(stats_df, 'Bust Type', perc=True)
+    plot_busts(stats_df, 'Start Hour')
+    plot_busts(stats_df, 'Start Hour', perc=True)
+    
+
+def amds_corrs(i_m_stats, icao, man_tafs):
     """
-    Adds bust stats to appropriate lists in dictionaries.
+    Gets amends and corrections counts for ICAO and adds to holders
+    dictionary.
 
     Args:
-        holders (dict): Dictionaries to store data
-        s_type (str): Type of stats to add
-        icao (str): ICAO of TAF
-        cats (dict): Dictionary of cats covered in TAF
-        t_type (str): TAF type
-        w_type (str): Weather type
+        i_m_stats (dict): Dictionary to store month stats for ICAO
+        icao (str): ICAO to get stats
+        man_tafs (list): List of manual TAFs with month and year info
     Returns:
         None
     """
-    # Key for holders dictionary
-    s_key = f'{s_type}_cats'
+    # Loop through manual TAFs
+    for taf_info in man_tafs:
 
-    # Get busts and METARs for para from list
-    w_cats = cats[cf.W_NAMES[w_type]]
+        # Get amend and correction info
+        amend = taf_info['amend']
+        correction = taf_info['correction']
 
-    # Extend list of categories covered
-    holders[s_key][icao][t_type].extend(w_cats)
-    
-    
-def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
-    """
-    Adds bust stats to appropriate lists in dictionaries.
-
-    Args:
-        holders (dict): Dictionaries to store data
-        s_type (str): Type of stats to add
-        icao (str): ICAO of TAF
-        p_busts (dict): Dictionary of busts in TAF
-        t_type (str): TAF type
-        w_type (str): Weather type
-    Returns:
-        None
-    """
-    # Key for holders dictionary
-    s_key = f'{s_type}_stats'
-
-    # Get busts and METARs for para from list
-    busts_metars = p_busts[cf.W_NAMES[w_type]]
-
-    # Do not need to continue if no busts
-    if not busts_metars:
-        return
-    
-    # Loop through all busts and METARs
-    for (busts, metar, _) in busts_metars:
-
-        # For wind stats
-        if s_type == 'wind':
-
-            holders[s_key][icao][f'{t_type} all'] += 1
-
-            # Get METAR direction
-            w_dir = metar[2][:3]
-            if w_dir.isnumeric() and int(w_dir) in cf.NUM_TO_DIR:
-                dir_lab = cf.NUM_TO_DIR[int(w_dir)]
-            elif w_dir == 'VRB':
-                dir_lab = 'VRB'
-            else:
-                dir_lab = False
-
-            # Add to stats dictionaries
-            d_stats = 'dirs_stats'
-            d_key = f'{t_type} dirs'
-            if busts['mean increase'] or busts['gust increase']:
-                holders[s_key][icao][f'{t_type} increase'] += 1
-                if dir_lab:
-                    holders[d_stats][d_key][icao]['increase'][dir_lab] += 1
-            if busts['mean decrease']:
-                holders[s_key][icao][f'{t_type} decrease'] += 1
-                if dir_lab:
-                    holders[d_stats][d_key][icao]['decrease'][dir_lab] += 1
-            if busts['dir']:
-                holders[s_key][icao][f'{t_type} dir'] += 1
-                if dir_lab:
-                    holders[d_stats][d_key][icao]['dir'][dir_lab] += 1
-
-        # For cld and vis stats
-        elif s_type in ['cld', 'vis']:
-
-            holders[s_key][icao][f'{t_type} all'] += 1
-            holders[s_key][icao][f'{t_type} {busts}'] += 1
-
-        # For wx stats
-        elif s_type == 'wx':
-            holders[s_key][icao][f'{t_type} all'] += 1
-
-            # Add bust type
-            for bust in busts:
-                if f'{t_type} {bust}' in holders[s_key][icao]:
-                    holders[s_key][icao][f'{t_type} {bust}'] += 1
-                else:
-                    holders[s_key][icao][f'{t_type} {bust}'] = 1
-
-        # For summary of all busts stats
-        else:
-            holders[s_key][icao][f'{t_type} {w_type}'] += 1
+        # Add to amends and corrections counts
+        if amend:
+            i_m_stats[icao]['amds']['num_amends'] += 1
+        if correction:
+            i_m_stats[icao]['amds']['num_corrections'] += 1
 
 
 def count_busts(taf, metars, icao, start, end):
@@ -180,6 +123,7 @@ def count_busts(taf, metars, icao, start, end):
         end (datetime): End time of TAF
     Returns:
         busts (dict): Dictionary of busts in TAF
+        cats_covered (dict): Dictionary of categories covered by TAF
     """
     # Try to find busts
     try:
@@ -195,21 +139,19 @@ def count_busts(taf, metars, icao, start, end):
     return busts, cats_covered
 
 
-def day_icao_stats(month_stats, icao, man_tafs, metars):
+def day_icao_stats(i_m_stats, icao, man_tafs, metars, start_hr):
     """
     Gets day stats for ICAO and adds to holders dictionary.
 
     Args:
-        holders (dict): Dictionaries to store data
-        icao (str): ICAO to get stats for
+        i_m_stats (dict): Dictionary to store month stats for ICAO
+        icao (str): ICAO to get stats
         man_tafs (list): List of manual TAFs with month and year info
         metars (list): List of METARs
+        start_hr (str): Start hour of TAF
     Returns:
         None
     """
-    # To keep track of TAFs used
-    used_tafs = []
-
     # Find TAF with correct timings
     for taf_info in man_tafs:
 
@@ -218,16 +160,6 @@ def day_icao_stats(month_stats, icao, man_tafs, metars):
         day = taf_info['day']
         month = taf_info['month']
         year = taf_info['year']
-        amend = taf_info['amend']
-        correction = taf_info['correction']
-
-        # Add to amends and corrections counts
-        if amend:
-            month_stats['num_amends'] += 1
-            continue
-        if correction:
-            month_stats['num_corrections'] += 1
-            continue
 
         # Get start and end times of TAF
         try:
@@ -237,13 +169,9 @@ def day_icao_stats(month_stats, icao, man_tafs, metars):
             print(f'Problem with TAF time: {taf}')
             continue
 
-        # Create TAF identifier, based on ICAO and start time
-        taf_id = f'{icao}_{start.strftime("%Y%m%d%H%M")}'
-
-        # Skip if TAF time already used
-        if taf_id in used_tafs:
+        # Check if TAF start hour matches required hour
+        if start.strftime('%H') != start_hr:
             continue
-        used_tafs.append(taf_id)
 
         # Get all METARs valid for TAF period
         v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
@@ -255,8 +183,15 @@ def day_icao_stats(month_stats, icao, man_tafs, metars):
         if busts is None:
             continue
 
+        # Update month stats
         for w_type in ['wind', 'visibility', 'cloud', 'weather', 'all']:
-            month_stats[f'{w_type}_busts'] += len(busts[w_type])
+            i_m_stats[icao][start_hr][f'{w_type}_busts'] += len(busts[w_type])
+
+        # Update number of METARs used
+        i_m_stats[icao][start_hr]['num_metars'] += len(busts['metars_used'])
+
+        # Only need one TAF per start hour per day
+        return
 
 
 def get_day_man_tafs_metars(day):
@@ -331,35 +266,6 @@ def get_day_man_tafs_metars(day):
     return day_tafs, day_3_metars
 
 
-def get_day_tafs(day, tafs_lines):
-    """
-    Extracts all TAFs issued on specified day from list of TAFs.
-
-    Args:
-        day (datetime): Day to extract TAFs for
-        tafs_lines (list): List of TAFs
-    Returns:
-        day_tafs (list): List of TAFs issued on specified day
-    """
-    # To add TAFs to
-    day_tafs = []
-
-    # Loop through all TAFs
-    for row in tafs_lines:
-
-        # Split row by ','
-        row = row.split(',')
-
-        # Get issue dt of TAF
-        idt = datetime.strptime(row[10][2:16], '%H%MZ %d/%m/%y')
-
-        # If TAF issued on required day, add to list
-        if (idt - timedelta(hours=1)).date() == day.date():
-            day_tafs.append(row)
-
-    return day_tafs
-
-
 def get_icao_metars(all_metars, icao):
     """
     Returns dictionary of METARs for specified ICAO.
@@ -406,8 +312,8 @@ def get_icao_metars(all_metars, icao):
 
 def get_new_data(stats):
     """
-    Extracts TAFs and METARs and compares them, collecting bust
-    information.
+    Extracts TAFs and METARs and compares them, collecting bust and 
+    amend information.
 
     Args:
         holders (dict): Dictionaries to store data
@@ -416,11 +322,21 @@ def get_new_data(stats):
     Returns:
         None
     """
-    # Loop though all days in period
+    # To keep track of month stats
     month_stats = {'visibility_busts': 0, 'cloud_busts': 0, 'wind_busts': 0,
                    'weather_busts': 0, 'all_busts': 0, 'num_metars': 0, 
                    'num_amends': 0, 'num_corrections': 0}
+    i_m_stats = {
+        icao: {start_hr: deepcopy(month_stats) 
+               for start_hr in ['00', '03', '06', '09', 
+                                '12', '15', '18', '21', 'amds']}
+        for icao in cf.REQ_ICAO_STRS
+    }
+    
+    # Define current month for tracking when month changes
     current_month = cf.DAYS[0].strftime('%Y-%m')
+
+    # Loop though all days in period
     for day in cf.DAYS:
 
         # Print for info of progress
@@ -428,22 +344,35 @@ def get_new_data(stats):
 
         month = day.strftime('%Y-%m')
         if month != current_month:
-            stats['Month'].append(current_month)
-            stats['Visibility Busts'].append(month_stats['visibility_busts'])
-            stats['Cloud Busts'].append(month_stats['cloud_busts'])
-            stats['Wind Busts'].append(month_stats['wind_busts'])
-            stats['Weather Busts'].append(month_stats['weather_busts'])
-            stats['Number of METARs'].append(month_stats['num_metars'])
-            stats['Number of Amends'].append(month_stats['num_amends'])
-            stats['Number of Corrections'].append(month_stats['num_corrections'])
+            for icao, airport in cf.REQ_ICAO_STRS.items():
+                for start_hr in ['00', '03', '06', '09', 
+                                 '12', '15', '18', '21', 'amds']:
+                    imh_stats = i_m_stats[icao][start_hr]
+                    stats['Airport'].append(airport)
+                    stats['TAF Length'].append(cf.TAF_LENS[icao])
+                    stats['Month'].append(current_month)
+                    stats['Start Hour'].append(start_hr)
+                    stats['Visibility Busts'].append(
+                        imh_stats['visibility_busts']
+                    )
+                    stats['Cloud Busts'].append(imh_stats['cloud_busts'])
+                    stats['Wind Busts'].append(imh_stats['wind_busts'])
+                    stats['Weather Busts'].append(imh_stats['weather_busts'])
+                    stats['All Busts'].append(imh_stats['all_busts'])
+                    stats['Number of METARs'].append(imh_stats['num_metars'])
+                    stats['Number of Amends'].append(imh_stats['num_amends'])
+                    stats['Number of Corrections'].append(
+                        imh_stats['num_corrections']
+                    )
             current_month = month
-            month_stats = {'visibility_busts': 0, 'cloud_busts': 0,
-                           'wind_busts': 0, 'weather_busts': 0, 'all_busts': 0, 
-                           'num_metars': 0, 'num_amends': 0, 
-                           'num_corrections': 0}
+            i_m_stats = {
+                icao: {start_hr: deepcopy(month_stats) 
+                    for start_hr in ['00', '03', '06', '09', 
+                                     '12', '15', '18', '21', 'amds']}
+                for icao in cf.REQ_ICAO_STRS
+            }
             
             # Pickle stats so far
-            print(stats)
             uf.pickle_data(stats, f'{cf.D_DIR}/stats.pkl')
 
         # Get all TAFs and METARs for day (3 days for METARs to cover
@@ -453,100 +382,31 @@ def get_new_data(stats):
         except:
             print(f'problem retrieving for day: {day}')
             continue
+
         # Loop through required ICAOs
         for icao in cf.REQ_ICAO_STRS:
 
-            # Get day stats for ICAO
-            day_icao_stats(month_stats, icao, man_tafs[icao], metars[icao])
+            # Get amends and corrections counts
+            amds_corrs(i_m_stats, icao, man_tafs[icao])
 
-    print(stats)
+            # Loop through possible TAF start hours
+            for start_hr in ['00', '03', '06', '09', '12', '15', '18', '21']:
 
-
-def get_taf_length(taf):
-    """
-    Returns the length of the TAF (base conditions plus change groups).
-
-    Args:
-        taf (str): TAF to check
-    Returns:
-        taf_length (int): Length of TAF
-    """
-    # Initialise count
-    count = 1
-
-    # Loop through TAF elements
-    for ind, ele in enumerate(taf):
-
-        # These indicate a new change group
-        if ele in ['BECMG', 'PROB30', 'PROB40']:
-            count += 1
-
-        # TEMPO can indicate new change group only if not preceded by
-        # PROB30 or PROB40
-        elif ele == 'TEMPO' and taf[ind - 1] not in ['PROB30', 'PROB40']:
-            count += 1
-
-    return count
-
-
-def get_taf_lines(f_path):
-    """
-    Reads in TAFs from file and returns as list.
-
-    Args:
-        f_path (str): Path to TAFs file
-    Returns:
-        tafs_lines (list): List of TAFs
-    """
-    # Read in TAFs from txt file
-    with open(f_path, 'r') as tafs_file:
-        tafs_lines = tafs_file.readlines()
-
-    return tafs_lines
-
-
-def get_taf_times(man_taf, vdt, a_start, a_end, a_taf):
-    """
-    Checks manual TAF valid and if TAF times match, returning start and
-    end times if so.
-
-    Args:
-        man_taf (str): Manual TAF to check
-        vdt (datetime): Validity datetime of TAFs
-        a_start (datetime): Start time of auto TAF
-        a_end (datetime): End time of auto TAF
-        a_taf (list): Auto TAF to check against
-    Returns:
-        start (datetime): Start time of TAFs
-        end (datetime): End time of TAFs
-        tafs_match (bool): True if TAFs match
-    """
-    # Move on if no record or cancelled
-    if man_taf == "NoRecord" or 'CNL' in man_taf:
-        return False, False, False
-
-    # This ensures manual TAF is in correct format (sometimes there are
-    # errors)
-    if man_taf[2] != a_taf[2]:
-        return False, False, False
-
-    # Get TAF validity time as python datetime objects (assumes month
-    # and year same as first guess TAF)
-    m_start, m_end = ConstructTimeObject(man_taf[2], int(man_taf[2][:2]),
-                                         vdt.month, vdt.year).TAF()
-
-    # Return False if times don't match
-    if not all([a_start == m_start, a_end == m_end]):
-        return False, False, False
-
-    # Now TAFs are matched and start and end times must be the same
-    start, end = a_start, a_end
-
-    return start, end, True
+                # Get day stats for ICAO
+                day_icao_stats(i_m_stats, icao, man_tafs[icao], metars[icao], 
+                               start_hr)
 
 
 def get_tafs_infos(tafs, icao):
+    """
+    Returns list of TAFs with month and year info.
 
+    Args:
+        tafs (DataFrame): DataFrame of TAFs to extract info from
+        icao (str): ICAO to extract TAFs for
+    Returns:
+        tafs_infos (list): List of TAFs with month and year info
+    """
     tafs_infos = []
     for taf in tafs:
 
@@ -574,65 +434,229 @@ def get_tafs_infos(tafs, icao):
     return tafs_infos
 
 
-def update_infos(holders, icao, vc_tafs, vc_busts):
+def line_plot(stats, y_col, hue, img_fname, y_label, title, hue_order=None,
+              figsize=(14, 6), ncol=1):
     """
-    Updates bust information dictionaries.
+    Creates line plot of specified stats.
 
     Args:
-        holders (dict): Dictionaries to store data
-        icao (str): ICAO of TAFs
-        vc_tafs (dict): Dictionary of TAFs
-        vc_busts (dict): Dictionary of busts
+        stats (DataFrame): DataFrame of stats to plot
+        y_col (str): Column to plot on y-axis
+        hue (str): Column to use for hue
+        img_fname (str): Filename to save image as
+        y_label (str): Label for y-axis
+        title (str): Title for plot
+        hue_order (list): Order of hue entries
+        figsize (tuple): Figure size
+        ncol (int): Number of columns in legend
     Returns:
         None
     """
-    # Add to other stats dictionaries for each weather type
-    for w_type, w_lng in cf.W_NAMES.items():
+    # Create line plot
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.lineplot(data=stats, x='Month', y=y_col, 
+                 hue=hue, ax=ax, marker='o', hue_order=hue_order)
 
-        # Don't bother appending info if no busts
-        if not any(busts[w_lng] for busts in vc_busts.values()):
-            continue
+    # Format axes, title, etc
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1), title=hue, ncol=ncol,
+              title_fontproperties={'weight': 'bold'})
+    ax.set_xlabel('Month', weight='bold')
+    ax.set_ylabel(y_label, weight='bold')
+    ax.set_title(title, weight='bold')
 
-        # Otherwise, append info
-        w_info = {t_type: [vc_tafs[t_type], vc_busts[t_type][w_lng]]
-                  for t_type in cf.TAF_TYPES}
+    # Reduce xtick labels to once a year
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+
+    # Save and close figure
+    img_fname = f'{cf.D_DIR}/plots/{img_fname}.png'
+    plt.tight_layout()
+    fig.savefig(img_fname)
+    plt.close()
+
+
+def plot_amends_total(stats_df):
+    """
+    Plots total amends for each month.
+
+    Args:
+        stats_df (DataFrame): DataFrame of stats
+    Returns:
+        None
+    """
+    # Only need 'amd' start hour for amends stats
+    stats_df = stats_df[stats_df['Start Hour'] == 'amds']
+
+    # Get totals for each month
+    total_stats = stats_df.groupby(['Month', 'TAF Length'], 
+                                   as_index=False).sum()
+    
+    # Create line plot
+    line_plot(total_stats, 'Number of Amends', 'TAF Length', 
+              'total_amends', 'Number of Amends', 'Total Monthly Amends')
+    
+    # Calculate 12 month rolling mean
+    total_stats = rolling_means(total_stats, 12, 'Number of Amends', 
+                                'TAF Length')
+
+    # Create line plot of rolling mean
+    line_plot(total_stats, 'Rolling 12 Month Mean', 'TAF Length', 
+              'total_amends_rolling', 'Number of Amends', 
+              '12 Month Rolling Mean of Amends')
+
+
+def plot_busts(stats_df, hue, perc=False):
+    """
+    Plots total busts for each month.
+
+    Args:
+        stats_df (DataFrame): DataFrame of stats
+        perc (bool): Whether to plot percentages or raw numbers
+    Returns:
+        None
+    """
+    # Remove 'amd' start hour entries
+    stats_df = stats_df[stats_df['Start Hour'] != 'amds']
+
+    # Get totals for each month
+    if hue == 'Bust Type':
+        total_stats = stats_df.groupby(['Month'], as_index=False).sum()
+    else:
+        total_stats = stats_df.groupby(['Month', hue], as_index=False).sum()
+
+    # Define order of columns for legends
+    if hue == 'Start Hour':
+        order = ['00', '03', '06', '09', '12', '15', '18', '21']
+        val_cols = ['All Busts']
+    else:
+        order = ['All Busts', 'Visibility Busts', 'Cloud Busts', 'Wind Busts', 
+                 'Weather Busts']
+        val_cols = order
+    
+    # Convert to percentage if required, and define a few other things
+    hue_lower = hue.lower().replace(' ', '_')
+    if perc:
         
+        # Calculate percentages
+        for col in val_cols:
+            total_stats[col] = (
+                total_stats[col] / 
+                total_stats['Number of METARs'] * 100
+            )
 
-        holders[f'{w_type}_info'][icao].append(w_info)
+        # Define labels and titles
+        img_name = f'total_busts_perc_{hue_lower}'
+        y_label = 'Percentage of Busts'
+        title = f'Monthly Percentage of TAF Busts by {hue}'
+        title_rolling = (f'12 Month Rolling Mean of Percentage of Busts by '
+                         f'{hue}')
+    
+    else:
 
-        # w_info = sum([[taf, busts[w_lng]]
-        #               for taf, busts in zip(all_tafs, all_busts)], [])
-        # holders[f'{w_type}_info'][icao].append(w_info)
+        # Define labels and titles
+        img_name = f'total_busts_{hue_lower}'
+        y_label = 'Number of Busts'
+        title = f'Monthly Number of TAF Busts by {hue}'
+        title_rolling = f'12 Month Rolling Mean of Number of Busts by {hue}'
+
+    # Melt DataFrame for plotting
+    if hue == 'Bust Type':  
+        total_stats = total_stats.melt(id_vars=['Month'], value_vars=order,
+                                       var_name=hue, 
+                                       value_name='Number of Busts')
+        y_col = 'Number of Busts'
+    else:
+        y_col = 'All Busts'
+
+    # Create line plot
+    line_plot(total_stats, y_col, hue, img_name, y_label, title, 
+              hue_order=order)
+
+    # Calculate 12 month rolling mean
+    total_stats = rolling_means(total_stats, 12, y_col, hue)
+    
+    # Create line plot of rolling mean
+    line_plot(total_stats, 'Rolling 12 Month Mean', hue, 
+              f'{img_name}_rolling', y_label, title_rolling, 
+              hue_order=order)
 
 
-def update_stats(holders, vc_busts, vc_cats, icao):
+def plot_amends_airports(stats_df):
     """
-    Updates bust statistics dictionaries.
+    Plots amends per airport for each TAF length.
 
     Args:
-        holders (dict): Dictionaries to store data
-        vc_busts (dict): Dictionary of busts
-        vc_cats (dict): Dictionary of categories covered
-        icao (str): ICAO of TAFs
+        stats_df (DataFrame): DataFrame of stats
     Returns:
         None
     """
-    # Loop through all TAF types and weather types
-    for t_type, w_type in itertools.product(cf.TAF_TYPES, cf.W_NAMES):
+    # Only need 'amd' start hour for amends stats
+    stats_df = stats_df[stats_df['Start Hour'] == 'amds']
 
-        # Define busts and cats
-        p_busts = vc_busts[t_type]
-        cats = vc_cats[t_type]
+    for taf_len in cf.TAF_LENS.values():
 
-        # Add to 'wind', 'vis', 'cld' and 'wx' dictionaries
-        add_stats(holders, w_type, icao, p_busts, t_type, w_type)
+        # Get totals for each month
+        total_stats = stats_df[stats_df['TAF Length'] == taf_len]
+        total_stats = total_stats.groupby(
+            ['Month', 'Airport'], as_index=False
+        ).sum()
 
-        # Add to 'all' dictionaries
-        add_stats(holders, 'all', icao, p_busts, t_type, w_type)
+        # Define figsize and ncols
+        if taf_len == 9:
+            figsize=(16, 6)
+            ncol=2
+        else:
+            figsize=(14, 6)
+            ncol=1
 
-        # Add to 'vis_cats' dictionary
-        if w_type in ['vis', 'cld']:
-            add_cats(holders, w_type, icao, cats, t_type, w_type)
+        # Create line plot
+        line_plot(total_stats, 'Number of Amends', 'Airport', 
+                  f'airports_amends_{taf_len}hr', 'Number of Amends', 
+                  f'Monthly Amends per Airport ({taf_len} Hour TAFs)', 
+                  figsize=figsize, ncol=ncol)
+
+        # Calculate 12 month rolling means
+        total_stats = rolling_means(total_stats, 12, 'Number of Amends', 
+                                    'Airport')
+
+        # Create line plot of rolling mean
+        line_plot(total_stats, 'Rolling 12 Month Mean', 'Airport', 
+                  f'airports_amends_{taf_len}hr_rolling', 'Number of Amends', 
+                  f'12 Month Rolling Mean of Amends per Airport ({taf_len} Hour TAFs)', 
+                  figsize=figsize, ncol=ncol)
+
+
+def rolling_means(stats, period, value_col, piv_col):
+    """
+    Calculates rolling means for specified period.
+
+    Args:
+        stats (DataFrame): DataFrame of stats to calculate rolling means
+        period (int): Period of rolling mean
+        value_col (str): Column to calculate rolling mean for
+        piv_col (str): Column to pivot on
+    Returns:
+        stats (DataFrame): DataFrame with rolling means added
+    """
+    # Pivot to wide format: index=Month, columns=TAF Length
+    wide = (stats.assign(Month=pd.to_datetime(stats['Month']))
+            .pivot(index='Month', columns=piv_col, 
+                   values=value_col)
+            .sort_index())
+
+    # 2) 12-row rolling mean (strict monthly cadence)
+    wide_roll = wide.rolling(window=period, min_periods=period).mean()
+
+    # 3) Return to long format and merge back if you want it on the original df
+    roll_long = wide_roll.stack().rename('mean_12m').reset_index()
+    out = stats.merge(roll_long, on=['Month', piv_col], how='left')
+
+    stats = out.rename(columns={'mean_12m': 'Rolling 12 Month Mean'})
+
+    # Remove months with less than 12 months of data
+    stats = stats.dropna(subset=['Rolling 12 Month Mean'])
+
+    return stats
 
 
 if __name__ == "__main__":

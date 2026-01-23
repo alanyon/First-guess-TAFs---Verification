@@ -13,6 +13,9 @@ VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
 PLOT_TITLES = os.environ['PLOT_TITLES']
 TAF_TYPES = json.loads(PLOT_TITLES)
+TAF_30HR = os.environ['TAF_30HR']
+TAF_24HR = os.environ['TAF_24HR']
+TAF_9HR = os.environ['TAF_9HR']
 
 # Accepted first guess TAFs
 AUTO_TAFS_LINES = []
@@ -77,6 +80,15 @@ REQ_ICAO_STRS = {
     'EGPH': 'Edinburgh', 'EGPI': 'Islay', 'EGPK': 'Prestwick', 
     'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
     'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford', 'EGHQ': 'Newquay'}
+
+TAF_LENS = {}
+for icao in REQ_ICAO_STRS.keys():
+    if icao in TAF_30HR.split():
+        TAF_LENS[icao] = 30
+    elif icao in TAF_24HR.split():
+        TAF_LENS[icao] = 24
+    elif icao in TAF_9HR.split():
+        TAF_LENS[icao] = 9
 
 NINE_HR_STRS = {
     'EGAC': 'Belfast City', 'EGAE': 'Londonderry', 'EGBJ': 'Gloucester',
