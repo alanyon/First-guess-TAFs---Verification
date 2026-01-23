@@ -11,23 +11,24 @@ Functions:
     get_new_data: Extracts TAFs and METARs amend and bust information
     get_tafs_infos: Returns list of TAFs with month and year info
     line_plot: Creates line plot of specified stats
+    pickle_data: Pickles data to specified file
     plot_amends_total: Plots total amends for each month
     plot_busts: Plots busts for each month
     plot_amends_airports: Plots amends for each airport
-    
+    unpickle_data: Unpickles data from specified file
 
 Written by Andre Lanyon.
 """
 import sys
+import pickle
 from copy import deepcopy
 from datetime import datetime, timedelta
 
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import metdb
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import useful_functions as uf
 from taf_monitor.checking import CheckTafThread
 from taf_monitor.time_functionality import ConstructTimeObject
 
@@ -53,20 +54,20 @@ def main(new_data):
     # Extracting data takes ages
     if new_data == 'yes':
 
-        # Get dictionaries, etc, to store data, either from pickled files or
-        # create new empty ones
+        # Get dictionaries, etc, to store data, either from pickled files
+        # or create new empty ones
         stats = {
             'Month': [], 'Start Hour': [], 'Airport': [], 'TAF Length': [],
-            'Visibility Busts': [], 'Cloud Busts': [], 'Wind Busts': [], 
-            'Weather Busts': [], 'All Busts': [], 'Number of METARs': [], 
+            'Visibility Busts': [], 'Cloud Busts': [], 'Wind Busts': [],
+            'Weather Busts': [], 'All Busts': [], 'Number of METARs': [],
             'Number of Amends': [], 'Number of Corrections': []
         }
-        
+
         # Get new data and add to data holders
         get_new_data(stats)
 
     # Unpickle stats dictionary
-    stats = uf.unpickle_data(f'{cf.D_DIR}/stats.pkl')
+    stats = unpickle_data(f'{cf.D_DIR}/stats.pkl')
 
     # Add to stats if required
     if new_data == 'add':
@@ -83,7 +84,7 @@ def main(new_data):
     plot_busts(stats_df, 'Bust Type', perc=True)
     plot_busts(stats_df, 'Start Hour')
     plot_busts(stats_df, 'Start Hour', perc=True)
-    
+
 
 def amds_corrs(i_m_stats, icao, man_tafs):
     """
@@ -127,7 +128,7 @@ def count_busts(taf, metars, icao, start, end):
     """
     # Try to find busts
     try:
-        busts, cats_covered = CheckTafThread(icao, start, end, taf, 
+        busts, cats_covered = CheckTafThread(icao, start, end, taf,
                                              metars).run()
 
     # If any issues, assume TAF is bad and print error out to check
@@ -217,8 +218,8 @@ def get_day_man_tafs_metars(day):
                          keywords=['PLATFORM EG',
                                    f'START TIME {start_times[0]}Z',
                                    f'END TIME {end_times[0]}Z'],
-                         elements=['ICAO_ID', 'TAF_RPT_TXT', 'YR', 'MON', 
-                                   'DAY', 'FCST_BGN_DAY', 'AMND_NUM', 
+                         elements=['ICAO_ID', 'TAF_RPT_TXT', 'YR', 'MON',
+                                   'DAY', 'FCST_BGN_DAY', 'AMND_NUM',
                                    'COR_NUM'])
 
     # Get METARs for all possible times TAFs cover (3 days)
@@ -312,7 +313,7 @@ def get_icao_metars(all_metars, icao):
 
 def get_new_data(stats):
     """
-    Extracts TAFs and METARs and compares them, collecting bust and 
+    Extracts TAFs and METARs and compares them, collecting bust and
     amend information.
 
     Args:
@@ -322,17 +323,20 @@ def get_new_data(stats):
     Returns:
         None
     """
-    # To keep track of month stats
+    # Start with zeroed month stats template
     month_stats = {'visibility_busts': 0, 'cloud_busts': 0, 'wind_busts': 0,
-                   'weather_busts': 0, 'all_busts': 0, 'num_metars': 0, 
+                   'weather_busts': 0, 'all_busts': 0, 'num_metars': 0,
                    'num_amends': 0, 'num_corrections': 0}
+    
+    # Need the above template for each ICAO and start hour (including a
+    # non start hour that will hold amends and corrections counts)
     i_m_stats = {
-        icao: {start_hr: deepcopy(month_stats) 
-               for start_hr in ['00', '03', '06', '09', 
+        icao: {start_hr: deepcopy(month_stats)
+               for start_hr in ['00', '03', '06', '09',
                                 '12', '15', '18', '21', 'amds']}
         for icao in cf.REQ_ICAO_STRS
     }
-    
+
     # Define current month for tracking when month changes
     current_month = cf.DAYS[0].strftime('%Y-%m')
 
@@ -342,10 +346,13 @@ def get_new_data(stats):
         # Print for info of progress
         print(day)
 
+        # Month of day in loop
         month = day.strftime('%Y-%m')
+
+        # If month has changed, save stats so far and reset month stats
         if month != current_month:
             for icao, airport in cf.REQ_ICAO_STRS.items():
-                for start_hr in ['00', '03', '06', '09', 
+                for start_hr in ['00', '03', '06', '09',
                                  '12', '15', '18', '21', 'amds']:
                     imh_stats = i_m_stats[icao][start_hr]
                     stats['Airport'].append(airport)
@@ -366,14 +373,14 @@ def get_new_data(stats):
                     )
             current_month = month
             i_m_stats = {
-                icao: {start_hr: deepcopy(month_stats) 
-                    for start_hr in ['00', '03', '06', '09', 
+                icao: {start_hr: deepcopy(month_stats)
+                    for start_hr in ['00', '03', '06', '09',
                                      '12', '15', '18', '21', 'amds']}
                 for icao in cf.REQ_ICAO_STRS
             }
-            
+
             # Pickle stats so far
-            uf.pickle_data(stats, f'{cf.D_DIR}/stats.pkl')
+            pickle_data(stats, f'{cf.D_DIR}/stats.pkl')
 
         # Get all TAFs and METARs for day (3 days for METARs to cover
         # TAF periods)
@@ -392,8 +399,8 @@ def get_new_data(stats):
             # Loop through possible TAF start hours
             for start_hr in ['00', '03', '06', '09', '12', '15', '18', '21']:
 
-                # Get day stats for ICAO
-                day_icao_stats(i_m_stats, icao, man_tafs[icao], metars[icao], 
+                # Get day stats for ICAO at start hour
+                day_icao_stats(i_m_stats, icao, man_tafs[icao], metars[icao],
                                start_hr)
 
 
@@ -426,8 +433,8 @@ def get_tafs_infos(tafs, icao):
 
         # Define month and year of TAF start and add to list
         taf_info = {'taf': taf_elmts, 'day': taf['FCST_BGN_DAY'],
-                    'month': v_day.month, 'year': v_day.year, 
-                    'amend': bool(taf['AMND_NUM']), 
+                    'month': v_day.month, 'year': v_day.year,
+                    'amend': bool(taf['AMND_NUM']),
                     'correction': bool(taf['COR_NUM'])}
         tafs_infos.append(taf_info)
 
@@ -454,7 +461,7 @@ def line_plot(stats, y_col, hue, img_fname, y_label, title, hue_order=None,
     """
     # Create line plot
     fig, ax = plt.subplots(figsize=figsize)
-    sns.lineplot(data=stats, x='Month', y=y_col, 
+    sns.lineplot(data=stats, x='Month', y=y_col,
                  hue=hue, ax=ax, marker='o', hue_order=hue_order)
 
     # Format axes, title, etc
@@ -475,6 +482,21 @@ def line_plot(stats, y_col, hue, img_fname, y_label, title, hue_order=None,
     plt.close()
 
 
+def pickle_data(data, fname):
+    """
+    Pickles data to specified file.
+
+    Args:
+        data: Data to pickle
+        fname (str): Filename to pickle data to
+    Returns:
+        None
+    """
+    file_object = open(fname, 'wb')
+    pickle.dump(data, file_object)
+    file_object.close()
+
+
 def plot_amends_total(stats_df):
     """
     Plots total amends for each month.
@@ -488,20 +510,20 @@ def plot_amends_total(stats_df):
     stats_df = stats_df[stats_df['Start Hour'] == 'amds']
 
     # Get totals for each month
-    total_stats = stats_df.groupby(['Month', 'TAF Length'], 
+    total_stats = stats_df.groupby(['Month', 'TAF Length'],
                                    as_index=False).sum()
-    
+
     # Create line plot
-    line_plot(total_stats, 'Number of Amends', 'TAF Length', 
+    line_plot(total_stats, 'Number of Amends', 'TAF Length',
               'total_amends', 'Number of Amends', 'Total Monthly Amends')
-    
+
     # Calculate 12 month rolling mean
-    total_stats = rolling_means(total_stats, 12, 'Number of Amends', 
+    total_stats = rolling_means(total_stats, 12, 'Number of Amends',
                                 'TAF Length')
 
     # Create line plot of rolling mean
-    line_plot(total_stats, 'Rolling 12 Month Mean', 'TAF Length', 
-              'total_amends_rolling', 'Number of Amends', 
+    line_plot(total_stats, 'Rolling 12 Month Mean', 'TAF Length',
+              'total_amends_rolling', 'Number of Amends',
               '12 Month Rolling Mean of Amends')
 
 
@@ -529,18 +551,18 @@ def plot_busts(stats_df, hue, perc=False):
         order = ['00', '03', '06', '09', '12', '15', '18', '21']
         val_cols = ['All Busts']
     else:
-        order = ['All Busts', 'Visibility Busts', 'Cloud Busts', 'Wind Busts', 
+        order = ['All Busts', 'Visibility Busts', 'Cloud Busts', 'Wind Busts',
                  'Weather Busts']
         val_cols = order
-    
+
     # Convert to percentage if required, and define a few other things
     hue_lower = hue.lower().replace(' ', '_')
     if perc:
-        
+
         # Calculate percentages
         for col in val_cols:
             total_stats[col] = (
-                total_stats[col] / 
+                total_stats[col] /
                 total_stats['Number of METARs'] * 100
             )
 
@@ -550,7 +572,7 @@ def plot_busts(stats_df, hue, perc=False):
         title = f'Monthly Percentage of TAF Busts by {hue}'
         title_rolling = (f'12 Month Rolling Mean of Percentage of Busts by '
                          f'{hue}')
-    
+
     else:
 
         # Define labels and titles
@@ -560,24 +582,24 @@ def plot_busts(stats_df, hue, perc=False):
         title_rolling = f'12 Month Rolling Mean of Number of Busts by {hue}'
 
     # Melt DataFrame for plotting
-    if hue == 'Bust Type':  
+    if hue == 'Bust Type':
         total_stats = total_stats.melt(id_vars=['Month'], value_vars=order,
-                                       var_name=hue, 
+                                       var_name=hue,
                                        value_name='Number of Busts')
         y_col = 'Number of Busts'
     else:
         y_col = 'All Busts'
 
     # Create line plot
-    line_plot(total_stats, y_col, hue, img_name, y_label, title, 
+    line_plot(total_stats, y_col, hue, img_name, y_label, title,
               hue_order=order)
 
     # Calculate 12 month rolling mean
     total_stats = rolling_means(total_stats, 12, y_col, hue)
-    
+
     # Create line plot of rolling mean
-    line_plot(total_stats, 'Rolling 12 Month Mean', hue, 
-              f'{img_name}_rolling', y_label, title_rolling, 
+    line_plot(total_stats, 'Rolling 12 Month Mean', hue,
+              f'{img_name}_rolling', y_label, title_rolling,
               hue_order=order)
 
 
@@ -610,19 +632,19 @@ def plot_amends_airports(stats_df):
             ncol=1
 
         # Create line plot
-        line_plot(total_stats, 'Number of Amends', 'Airport', 
-                  f'airports_amends_{taf_len}hr', 'Number of Amends', 
-                  f'Monthly Amends per Airport ({taf_len} Hour TAFs)', 
+        line_plot(total_stats, 'Number of Amends', 'Airport',
+                  f'airports_amends_{taf_len}hr', 'Number of Amends',
+                  f'Monthly Amends per Airport ({taf_len} Hour TAFs)',
                   figsize=figsize, ncol=ncol)
 
         # Calculate 12 month rolling means
-        total_stats = rolling_means(total_stats, 12, 'Number of Amends', 
+        total_stats = rolling_means(total_stats, 12, 'Number of Amends',
                                     'Airport')
 
         # Create line plot of rolling mean
-        line_plot(total_stats, 'Rolling 12 Month Mean', 'Airport', 
-                  f'airports_amends_{taf_len}hr_rolling', 'Number of Amends', 
-                  f'12 Month Rolling Mean of Amends per Airport ({taf_len} Hour TAFs)', 
+        line_plot(total_stats, 'Rolling 12 Month Mean', 'Airport',
+                  f'airports_amends_{taf_len}hr_rolling', 'Number of Amends',
+                  f'12 Month Rolling Mean of Amends per Airport ({taf_len} Hour TAFs)',
                   figsize=figsize, ncol=ncol)
 
 
@@ -640,14 +662,14 @@ def rolling_means(stats, period, value_col, piv_col):
     """
     # Pivot to wide format: index=Month, columns=TAF Length
     wide = (stats.assign(Month=pd.to_datetime(stats['Month']))
-            .pivot(index='Month', columns=piv_col, 
+            .pivot(index='Month', columns=piv_col,
                    values=value_col)
             .sort_index())
 
-    # 2) 12-row rolling mean (strict monthly cadence)
+    # Period-row rolling mean (strict monthly cadence)
     wide_roll = wide.rolling(window=period, min_periods=period).mean()
 
-    # 3) Return to long format and merge back if you want it on the original df
+    # Return to long format and merge back
     roll_long = wide_roll.stack().rename('mean_12m').reset_index()
     out = stats.merge(roll_long, on=['Month', piv_col], how='left')
 
@@ -659,10 +681,27 @@ def rolling_means(stats, period, value_col, piv_col):
     return stats
 
 
+def unpickle_data(fname):
+    """
+    Unpickles data from specified file.
+
+    Args:
+        fname (str): Filename to unpickle data from
+    Returns:
+        data: Unpickled data
+    """
+    with open(fname, 'rb') as file_object:
+        unpickle = pickle.Unpickler(file_object)
+        data = unpickle.load()
+
+    return data
+
+
 if __name__ == "__main__":
 
     # Print time
-    time_1 = uf.print_time('started')
+    time_1 = datetime.now()
+    print('Started', time_1)
 
     # Get user defined indication for whether new data is needed
     new_data = sys.argv[1]
@@ -671,7 +710,8 @@ if __name__ == "__main__":
     main(new_data)
 
     # Print time
-    time_2 = uf.print_time('Finished')
+    time_2 = datetime.now()
+    print('Finished', time_2)
 
     # Print time taken
-    uf.time_taken(time_1, time_2, unit='seconds')
+    print('Time taken (seconds):', (time_2 - time_1).total_seconds())
