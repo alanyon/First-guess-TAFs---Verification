@@ -20,6 +20,7 @@ Functions:
 Written by Andre Lanyon.
 """
 import sys
+import os
 import pickle
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -345,6 +346,10 @@ def get_new_data(stats):
 
         # Print for info of progress
         print(day)
+        print(f'Time now: {datetime.now()}')
+
+        # Define day pickle file
+        d_file = f'{cf.D_DIR}/{day.strftime("%Y%m%d")}'
 
         # Month of day in loop
         month = day.strftime('%Y-%m')
@@ -382,6 +387,15 @@ def get_new_data(stats):
             # Pickle stats so far
             pickle_data(stats, f'{cf.D_DIR}/stats.pkl')
 
+            # Remove day pickle files
+            os.system(f'rm {cf.D_DIR}/20*')
+
+        # Pick up pickled data if it exists
+        else:
+            yfl = f'{cf.D_DIR}/{(day - timedelta(days=1)).strftime("%Y%m%d")}'
+            if os.path.exists(yfl):
+                i_m_stats = unpickle_data(yfl)
+
         # Get all TAFs and METARs for day (3 days for METARs to cover
         # TAF periods)
         try:
@@ -402,6 +416,9 @@ def get_new_data(stats):
                 # Get day stats for ICAO at start hour
                 day_icao_stats(i_m_stats, icao, man_tafs[icao], metars[icao],
                                start_hr)
+
+        # Pickle month data so far using day
+        pickle_data(i_m_stats, d_file)
 
 
 def get_tafs_infos(tafs, icao):
