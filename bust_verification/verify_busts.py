@@ -19,9 +19,9 @@ Functions:
 
 Written by Andre Lanyon.
 """
-import sys
 import os
 import pickle
+import sys
 from copy import deepcopy
 from datetime import datetime, timedelta
 
@@ -37,7 +37,7 @@ import configs as cf
 
 # Set plotting style
 sns.set_style('darkgrid')
-sns.set(font_scale=1.5)
+sns.set(font_scale=1.3)
 pd.set_option('display.max_columns', None)
 
 
@@ -328,7 +328,7 @@ def get_new_data(stats):
     month_stats = {'visibility_busts': 0, 'cloud_busts': 0, 'wind_busts': 0,
                    'weather_busts': 0, 'all_busts': 0, 'num_metars': 0,
                    'num_amends': 0, 'num_corrections': 0}
-    
+
     # Need the above template for each ICAO and start hour (including a
     # non start hour that will hold amends and corrections counts)
     i_m_stats = {
