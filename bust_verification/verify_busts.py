@@ -252,7 +252,7 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
         for taf in a_tafs:
             taf_day = int(taf[2][:2])
             a_start, a_end = ConstructTimeObject(taf[2], taf_day,
-                                             vdt.month, vdt.year).TAF()
+                                                 vdt.month, vdt.year).TAF()
             a_starts.append(a_start)
             a_ends.append(a_end)
 
