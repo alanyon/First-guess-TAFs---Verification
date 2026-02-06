@@ -655,10 +655,10 @@ def write_to_excel(holders, icao, taf_dir):
         row_num += max(all_lines) + 2
 
         # Busts header
-        for ind in range(len(item)):
+        for ind, (t_type, (taf, _)) in enumerate(item.items()):
             worksheet.write(row_num, ind * 12, 'TAF Busts', big_bold)
-        type_workbooks[t_type][1].write(row_num, 0, 'TAF Busts', 
-                                        type_workbooks[t_type][5])
+            type_workbooks[t_type][1].write(row_num, 0, 'TAF Busts', 
+                                            type_workbooks[t_type][5])
 
         # Add to row number
         row_num += 1
