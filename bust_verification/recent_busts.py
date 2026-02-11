@@ -42,6 +42,8 @@ TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
                 'First-guess-TAFs---Verification/standard_verification/'
                 'taf_info.csv')
 TAF_TYPES = {'auto': 'Auto TAFs (no ML)', 'auto_ml': 'Auto TAFs (with ML)',
+             'auto_ml_up_1': 'Auto TAFs (with ML) - Obs Update 1', 
+             'auto_ml_up_2': 'Auto TAFs (with ML) - Obs Update 2', 
              'man': 'Manual', }
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']
 B_TYPES = ['increase', 'decrease', 'both', 'all']
@@ -72,12 +74,16 @@ def main():
         # Read Auto TAFs from txt files
         auto_tafs = get_auto_tafs(taf_dir, taf_hr, 'no_obs')
         auto_tafs_ml = get_auto_tafs(taf_dir, taf_hr, 'no_obs_ml')
+        auto_tafs_ml_up_1 = get_auto_tafs(taf_dir, taf_hr, 'obs_update_1_ml')
+        auto_tafs_ml_up_2 = get_auto_tafs(taf_dir, taf_hr, 'obs_update_2_ml')
 
         # Loop through required ICAOs
         for icao in icao_dict:
 
             # Get TAFs for ICAO and start time
-            icao_tafs = get_icao_tafs(icao, auto_tafs, auto_tafs_ml, man_tafs)
+            icao_tafs = get_icao_tafs(icao, auto_tafs, auto_tafs_ml, 
+                                      auto_tafs_ml_up_1, auto_tafs_ml_up_2,
+                                      man_tafs)
 
             # Move on if no TAFs found
             if not icao_tafs:
@@ -242,7 +248,8 @@ def get_icao_metars(all_metars, all_specis, icao, taf_start_dt, icao_tafs):
     return metars, start, end
 
 
-def get_icao_tafs(icao, auto_tafs, auto_tafs_ml, man_tafs):
+def get_icao_tafs(icao, auto_tafs, auto_tafs_ml, auto_tafs_ml_up_1, 
+                  auto_tafs_ml_up_2, man_tafs):
     """
     Gets TAFs for specified ICAO and TAF start time.
 
@@ -250,6 +257,8 @@ def get_icao_tafs(icao, auto_tafs, auto_tafs_ml, man_tafs):
         icao (str): ICAO to get TAFs for
         auto_tafs (list): List of Auto TAFs without ML
         auto_tafs_ml (list): List of Auto TAFs with ML
+        auto_tafs_ml_up_1 (list): List of Auto TAFs with ML - Update 1
+        auto_tafs_ml_up_2 (list): List of Auto TAFs with ML - Update 2
         man_tafs (list): List of manual TAFs
     Returns:
         matched_tafs (dict): Dictionary of matched TAFs (or None)
@@ -257,14 +266,19 @@ def get_icao_tafs(icao, auto_tafs, auto_tafs_ml, man_tafs):
     # Get Auto TAFs for ICAO
     icao_auto_tafs = [row for row in auto_tafs if icao in row]
     icao_auto_tafs_ml = [row for row in auto_tafs_ml if icao in row]
+    icao_auto_tafs_ml_up_1 = [row for row in auto_tafs_ml_up_1 if icao in row]
+    icao_auto_tafs_ml_up_2 = [row for row in auto_tafs_ml_up_2 if icao in row]
 
     # Return None if no Auto TAFs found
-    if not icao_auto_tafs or not icao_auto_tafs_ml:
+    if any([not icao_auto_tafs, not icao_auto_tafs_ml, 
+            not icao_auto_tafs_ml_up_1, not icao_auto_tafs_ml_up_2]):
         return None
 
     # Should only be one Auto TAF per ICAO per TAF start time
     icao_auto_taf = icao_auto_tafs[0][46:].split()
     icao_auto_taf_ml = icao_auto_tafs_ml[0][46:].split()
+    icao_auto_taf_ml_up_1 = icao_auto_tafs_ml_up_1[0][46:].split()
+    icao_auto_taf_ml_up_2 = icao_auto_tafs_ml_up_2[0][46:].split()
 
     # Get manual TAFs for ICAO
     icao_man_tafs = [str(row['TAF_RPT_TXT'], 'utf-8').strip().split()
@@ -283,10 +297,13 @@ def get_icao_tafs(icao, auto_tafs, auto_tafs_ml, man_tafs):
             continue
 
         # If start and finish times match, consider TAFs matched
-        if man_taf[2] == icao_auto_taf[2] == icao_auto_taf_ml[2]:
+        if (man_taf[2] == icao_auto_taf[2] == icao_auto_taf_ml[2] == 
+            icao_auto_taf_ml_up_1[2] == icao_auto_taf_ml_up_2[2]):
 
             # Collect into dictionary and return
             matched_tafs = {'auto': icao_auto_taf, 'auto_ml': icao_auto_taf_ml,
+                            'auto_ml_up_1': icao_auto_taf_ml_up_1,
+                            'auto_ml_up_2': icao_auto_taf_ml_up_2,
                             'man': man_taf}
             return matched_tafs
 
@@ -497,13 +514,15 @@ def update_html(date, fname):
     # where an extra line is required
     with open(fname, 'r', encoding='utf-8') as file:
         lines = file.readlines()
-    first_lines = lines[:-55]
-    last_lines = lines[-55:]
+    first_lines = lines[:-79]
+    last_lines = lines[-79:]
 
     # Edit html file and append/edit the required lines
     first_lines[-1] = first_lines[-1].replace(' selected="selected"', '')
     first_lines.append('                    <option selected="selected" '
                        f'value="{date}">{date}</option>\n')
+    last_lines[-67] = last_lines[-67].replace(last_lines[-67][31:39], date)
+    last_lines[-55] = last_lines[-55].replace(last_lines[-55][31:39], date)
     last_lines[-43] = last_lines[-43].replace(last_lines[-43][31:39], date)
     last_lines[-31] = last_lines[-31].replace(last_lines[-31][31:39], date)
     last_lines[-19] = last_lines[-19].replace(last_lines[-19][31:39], date)
