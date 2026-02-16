@@ -36,7 +36,7 @@ from taf_monitor.time_functionality import ConstructTimeObject
 # Define constants
 CYCLE_TIME = os.environ['CYCLE_TIME']
 OUTDIR = os.environ['OUTDIR']
-DATADIR = os.environ['DATADIR']
+DATADIR = os.environ['DATA_DIR']
 METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
 TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
                 'First-guess-TAFs---Verification/standard_verification/'
@@ -114,7 +114,7 @@ def main():
     for icao in icao_dict:
         write_to_excel(holders, icao, taf_dir)
 
-    # Update HTML file
+    # # Update HTML file
     date_str = taf_start_dt.strftime('%Y%m%d')
     html_file = f'{OUTDIR}/html/busts.html'
     update_html(date_str, html_file)
