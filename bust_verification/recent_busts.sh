@@ -8,6 +8,7 @@ export CYCLE_TIME=2026020900
 export OUTDIR=/home/users/andre.lanyon/public_html/tafs
 export DATA_DIR=/data/users/andre.lanyon/tafs/recent_busts
 
-python recent_busts.py
+# python recent_busts.py
+python verify_recent_busts.py
 
 conda deactivate

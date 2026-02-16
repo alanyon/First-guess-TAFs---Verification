@@ -523,8 +523,6 @@ def update_html(date, fname):
                        f'value="{date}">{date}</option>\n')
     last_lines[-67] = last_lines[-67].replace(last_lines[-67][31:39], date)
     last_lines[-55] = last_lines[-55].replace(last_lines[-55][31:39], date)
-    last_lines[-43] = last_lines[-43].replace(last_lines[-43][31:39], date)
-    last_lines[-31] = last_lines[-31].replace(last_lines[-31][31:39], date)
     last_lines[-19] = last_lines[-19].replace(last_lines[-19][31:39], date)
 
     # Concatenate the lists together
