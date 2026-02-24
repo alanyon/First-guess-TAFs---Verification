@@ -42,11 +42,15 @@ TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
                 'First-guess-TAFs---Verification/standard_verification/'
                 'taf_info.csv')
 TAF_TYPES = {
-    'auto_opt': 'Optimistic Auto TAFs (no ML)', 
+    'auto_opt': 'Optimistic Auto TAFs (no ML)',
+    'auto_opt_up_1': 'Optimistic Auto TAFs (no ML) - Obs Update 1',
+    'auto_opt_up_2': 'Optimistic Auto TAFs (no ML) - Obs Update 2',
     'auto_opt_ml': 'Optimistic Auto TAFs (with ML)',
     'auto_opt_ml_up_1': 'Optimistic Auto TAFs (with ML) - Obs Update 1', 
     'auto_opt_ml_up_2': 'Optimistic Auto TAFs (with ML) - Obs Update 2',
     'auto_pes': 'Pessimistic Auto TAFs (no ML)', 
+    'auto_pes_up_1': 'Pessimistic Auto TAFs (no ML) - Obs Update 1',
+    'auto_pes_up_2': 'Pessimistic Auto TAFs (no ML) - Obs Update 2',
     'auto_pes_ml': 'Pessimistic Auto TAFs (with ML)',
     'auto_pes_ml_up_1': 'Pessimistic Auto TAFs (with ML) - Obs Update 1',
     'auto_pes_ml_up_2': 'Pessimistic Auto TAFs (with ML) - Obs Update 2',
@@ -80,12 +84,16 @@ def main():
 
         # Read Auto TAFs from txt files
         auto_tafs_opt = get_auto_tafs(taf_dir, taf_hr, 'opt_no_obs')
+        auto_tafs_opt_up_1 = get_auto_tafs(taf_dir, taf_hr, 'opt_obs_update_1')
+        auto_tafs_opt_up_2 = get_auto_tafs(taf_dir, taf_hr, 'opt_obs_update_2')
         auto_tafs_opt_ml = get_auto_tafs(taf_dir, taf_hr, 'opt_no_obs_ml')
         auto_tafs_opt_ml_up_1 = get_auto_tafs(taf_dir, taf_hr, 
                                               'opt_obs_update_1_ml')
         auto_tafs_opt_ml_up_2 = get_auto_tafs(taf_dir, taf_hr, 
                                               'opt_obs_update_2_ml')
         auto_tafs_pes = get_auto_tafs(taf_dir, taf_hr, 'pes_no_obs')
+        auto_tafs_pes_up_1 = get_auto_tafs(taf_dir, taf_hr, 'pes_obs_update_1')
+        auto_tafs_pes_up_2 = get_auto_tafs(taf_dir, taf_hr, 'pes_obs_update_2')
         auto_tafs_pes_ml = get_auto_tafs(taf_dir, taf_hr, 'pes_no_obs_ml')
         auto_tafs_pes_ml_up_1 = get_auto_tafs(taf_dir, taf_hr, 
                                               'pes_obs_update_1_ml')
@@ -97,9 +105,11 @@ def main():
 
             # Get TAFs for ICAO and start time
             icao_tafs = get_icao_tafs(
-                icao, auto_tafs_opt, auto_tafs_opt_ml, auto_tafs_opt_ml_up_1, 
-                auto_tafs_opt_ml_up_2, auto_tafs_pes, auto_tafs_pes_ml,
-                auto_tafs_pes_ml_up_1, auto_tafs_pes_ml_up_2, man_tafs
+                icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2, 
+                auto_tafs_opt_ml, auto_tafs_opt_ml_up_1, auto_tafs_opt_ml_up_2, 
+                auto_tafs_pes, auto_tafs_pes_up_1, auto_tafs_pes_up_2, 
+                auto_tafs_pes_ml, auto_tafs_pes_ml_up_1, auto_tafs_pes_ml_up_2, 
+                man_tafs
             )
 
             # Move on if no TAFs found
@@ -265,9 +275,10 @@ def get_icao_metars(all_metars, all_specis, icao, taf_start_dt, icao_tafs):
     return metars, start, end
 
 
-def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_ml, 
-                  auto_tafs_opt_ml_up_1, auto_tafs_opt_ml_up_2, auto_tafs_pes, 
-                  auto_tafs_pes_ml, auto_tafs_pes_ml_up_1, 
+def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2, 
+                  auto_tafs_opt_ml, auto_tafs_opt_ml_up_1, 
+                  auto_tafs_opt_ml_up_2, auto_tafs_pes, auto_tafs_pes_up_1, 
+                  auto_tafs_pes_up_2, auto_tafs_pes_ml, auto_tafs_pes_ml_up_1, 
                   auto_tafs_pes_ml_up_2, man_tafs):
     """
     Gets TAFs for specified ICAO and TAF start time.
@@ -275,10 +286,14 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_ml,
     Args:
         icao (str): ICAO to get TAFs for
         auto_tafs_opt (list): List of Auto TAFs without ML
+        auto_tafs_opt_up_1 (list): List of Auto TAFs without ML - Update 1
+        auto_tafs_opt_up_2 (list): List of Auto TAFs without ML - Update 2
         auto_tafs_opt_ml (list): List of Auto TAFs with ML
         auto_tafs_opt_ml_up_1 (list): List of Auto TAFs with ML - Update 1
         auto_tafs_opt_ml_up_2 (list): List of Auto TAFs with ML - Update 2
         auto_tafs_pes (list): List of Auto TAFs PES
+        auto_tafs_pes_up_1 (list): List of Auto TAFs PES - Update 1
+        auto_tafs_pes_up_2 (list): List of Auto TAFs PES - Update 2
         auto_tafs_pes_ml (list): List of Auto TAFs PES with ML
         auto_tafs_pes_ml_up_1 (list): List of Auto TAFs PES with ML - Update 1
         auto_tafs_pes_ml_up_2 (list): List of Auto TAFs PES with ML - Update 2
@@ -288,12 +303,20 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_ml,
     """
     # Get Auto TAFs for ICAO
     icao_auto_tafs_opt = [row for row in auto_tafs_opt if icao in row]
+    icao_auto_tafs_opt_up_1 = [row for row in auto_tafs_opt_up_1 
+                               if icao in row]
+    icao_auto_tafs_opt_up_2 = [row for row in auto_tafs_opt_up_2 
+                               if icao in row]
     icao_auto_tafs_opt_ml = [row for row in auto_tafs_opt_ml if icao in row]
     icao_auto_tafs_opt_ml_up_1 = [row for row in auto_tafs_opt_ml_up_1 
                                   if icao in row]
     icao_auto_tafs_opt_ml_up_2 = [row for row in auto_tafs_opt_ml_up_2 
                                   if icao in row]
     icao_auto_tafs_pes = [row for row in auto_tafs_pes if icao in row]
+    icao_auto_tafs_pes_up_1 = [row for row in auto_tafs_pes_up_1 
+                               if icao in row]
+    icao_auto_tafs_pes_up_2 = [row for row in auto_tafs_pes_up_2 
+                               if icao in row]
     icao_auto_tafs_pes_ml = [row for row in auto_tafs_pes_ml if icao in row]
     icao_auto_tafs_pes_ml_up_1 = [row for row in auto_tafs_pes_ml_up_1 
                                   if icao in row]  
@@ -301,18 +324,24 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_ml,
                                   if icao in row]
 
     # Return None if no Auto TAFs found
-    if any([not icao_auto_tafs_opt, not icao_auto_tafs_opt_ml, 
+    if any([not icao_auto_tafs_opt, not icao_auto_tafs_opt_up_1, 
+            not icao_auto_tafs_opt_up_2, not icao_auto_tafs_opt_ml, 
             not icao_auto_tafs_opt_ml_up_1, not icao_auto_tafs_opt_ml_up_2,
-            not icao_auto_tafs_pes, not icao_auto_tafs_pes_ml,
+            not icao_auto_tafs_pes, not icao_auto_tafs_pes_up_1, 
+            not icao_auto_tafs_pes_up_2, not icao_auto_tafs_pes_ml, 
             not icao_auto_tafs_pes_ml_up_1, not icao_auto_tafs_pes_ml_up_2]):
         return None
 
     # Should only be one Auto TAF per ICAO per TAF start time
     icao_auto_taf_opt = icao_auto_tafs_opt[0][46:].split()
+    icao_auto_taf_opt_up_1 = icao_auto_tafs_opt_up_1[0][46:].split()
+    icao_auto_taf_opt_up_2 = icao_auto_tafs_opt_up_2[0][46:].split()
     icao_auto_taf_opt_ml = icao_auto_tafs_opt_ml[0][46:].split()
     icao_auto_taf_opt_ml_up_1 = icao_auto_tafs_opt_ml_up_1[0][46:].split()
     icao_auto_taf_opt_ml_up_2 = icao_auto_tafs_opt_ml_up_2[0][46:].split()
     icao_auto_taf_pes = icao_auto_tafs_pes[0][46:].split()
+    icao_auto_taf_pes_up_1 = icao_auto_tafs_pes_up_1[0][46:].split()
+    icao_auto_taf_pes_up_2 = icao_auto_tafs_pes_up_2[0][46:].split()
     icao_auto_taf_pes_ml = icao_auto_tafs_pes_ml[0][46:].split()
     icao_auto_taf_pes_ml_up_1 = icao_auto_tafs_pes_ml_up_1[0][46:].split()
     icao_auto_taf_pes_ml_up_2 = icao_auto_tafs_pes_ml_up_2[0][46:].split()
@@ -334,17 +363,23 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_ml,
             continue
 
         # If start and finish times match, consider TAFs matched
-        if (man_taf[2] == icao_auto_taf_opt[2] == icao_auto_taf_opt_ml[2] == 
+        if (man_taf[2] == icao_auto_taf_opt[2] == icao_auto_taf_opt_up_1[2] == 
+            icao_auto_taf_opt_up_2[2] == icao_auto_taf_opt_ml[2] == 
             icao_auto_taf_opt_ml_up_1[2] == icao_auto_taf_opt_ml_up_2[2] ==
-            icao_auto_taf_pes[2] == icao_auto_taf_pes_ml[2] ==
+            icao_auto_taf_pes[2] == icao_auto_taf_pes_up_1[2] == 
+            icao_auto_taf_pes_up_2[2] == icao_auto_taf_pes_ml[2] ==
             icao_auto_taf_pes_ml_up_1[2] == icao_auto_taf_pes_ml_up_2[2]):
 
             # Collect into dictionary and return
             matched_tafs = {'auto_opt': icao_auto_taf_opt, 
+                            'auto_opt_up_1': icao_auto_taf_opt_up_1,
+                            'auto_opt_up_2': icao_auto_taf_opt_up_2,
                             'auto_opt_ml': icao_auto_taf_opt_ml,
                             'auto_opt_ml_up_1': icao_auto_taf_opt_ml_up_1,
                             'auto_opt_ml_up_2': icao_auto_taf_opt_ml_up_2,
                             'auto_pes': icao_auto_taf_pes,
+                            'auto_pes_up_1': icao_auto_taf_pes_up_1,
+                            'auto_pes_up_2': icao_auto_taf_pes_up_2,
                             'auto_pes_ml': icao_auto_taf_pes_ml,
                             'auto_pes_ml_up_1': icao_auto_taf_pes_ml_up_1,
                             'auto_pes_ml_up_2': icao_auto_taf_pes_ml_up_2,
