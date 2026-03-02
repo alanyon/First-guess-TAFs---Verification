@@ -1,6 +1,9 @@
 
 import os
 import pickle
+import numpy as np
+import matplotlib
+from matplotlib import colors
 import matplotlib.pyplot as plt
 import seaborn as sns
 from copy import deepcopy
@@ -9,10 +12,21 @@ import pandas as pd
 
 # Define constants
 DATADIR = os.environ['DATA_DIR']
-TAF_TYPES = {'auto': 'Auto TAFs (no ML)', 'auto_ml': 'Auto TAFs (with ML)', 
-             'auto_ml_up_1': 'Auto TAFs (with ML) - Obs Update 1',
-             'auto_ml_up_2': 'Auto TAFs (with ML) - Obs Update 2',
-             'man': 'Manual TAFs'}
+TAF_TYPES = {
+    'auto_opt': 'Optimistic Auto TAFs\n(no ML)',
+    'auto_opt_up_1': 'Optimistic Auto TAFs\n(no ML) - Obs Update 1',
+    'auto_opt_up_2': 'Optimistic Auto TAFs\n(no ML) - Obs Update 2',
+    'auto_opt_ml': 'Optimistic Auto TAFs\n(with ML)',
+    'auto_opt_ml_up_1': 'Optimistic Auto TAFs\n(with ML) - Obs Update 1', 
+    'auto_opt_ml_up_2': 'Optimistic Auto TAFs\n(with ML) - Obs Update 2',
+    'auto_pes': 'Pessimistic Auto TAFs\n(no ML)', 
+    'auto_pes_up_1': 'Pessimistic Auto TAFs\n(no ML) - Obs Update 1',
+    'auto_pes_up_2': 'Pessimistic Auto TAFs\n(no ML) - Obs Update 2',
+    'auto_pes_ml': 'Pessimistic Auto TAFs\n(with ML)',
+    'auto_pes_ml_up_1': 'Pessimistic Auto TAFs\n(with ML) - Obs Update 1',
+    'auto_pes_ml_up_2': 'Pessimistic Auto TAFs\n(with ML) - Obs Update 2',
+    'man': 'Manual'
+}
 BUST_TYPES = {'vis': 'Visibility Busts', 'cld': 'Cloud Busts', 
               'wind': 'Wind Busts', 'wx': 'Weather Busts', 'all': 'All Busts'}
 TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
@@ -62,7 +76,6 @@ def main():
     for icao, stats in icao_stats.items():
         for key, busts in stats.items():
             taf_type, bust_type = key.split(' ')
-
             big_stats['Airport'].append(icao_dict[icao])
             big_stats['TAF Type'].append(TAF_TYPES[taf_type])
             big_stats['Bust Type'].append(BUST_TYPES[bust_type])
@@ -71,17 +84,24 @@ def main():
     # Convert the dictionary to a DataFrame
     stats_df = pd.DataFrame(big_stats)
 
+    # Build colour palette
+    blues6 = sample_shades('Blues', 6, low=0.30, high=0.95)
+    reds6  = sample_shades('Reds',  6, low=0.30, high=0.95)
+    green1 = ['#2ca02c']
+    palette_13 = blues6 + reds6 + green1
+
     # Create bar plot
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(16, 10))
     sns.barplot(data=stats_df, x='Number of Busts', y='Bust Type',
-                hue='TAF Type', estimator=sum, errorbar=None, ax=ax)
+                hue='TAF Type', palette=palette_13, estimator=sum, errorbar=None, 
+                ax=ax)
     
     # Add scores on top of bars
     for ind in ax.containers:
-        ax.bar_label(ind, fontsize=12)
+        ax.bar_label(ind, fontsize=8)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=18)
+    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=15)
     ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
     ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
     ax.tick_params(axis='x', labelsize=14)
@@ -98,16 +118,16 @@ def main():
         stats_df_icao = stats_df[stats_df['Airport'] == icao_dict[icao]]
 
         # Create bar plot
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=(16, 10))
         sns.barplot(data=stats_df_icao, x='Number of Busts', y='Bust Type',
-                    hue='TAF Type', ax=ax)
+                    palette=palette_13, hue='TAF Type', ax=ax)
         
         # Add scores on top of bars
         for ind in ax.containers:
-            ax.bar_label(ind, fontsize=12)
+            ax.bar_label(ind, fontsize=8)
 
         # Format axes, etc
-        ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=18)
+        ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=15)
         ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
         ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
         ax.tick_params(axis='x', labelsize=14)
@@ -118,6 +138,18 @@ def main():
         plt.tight_layout()
         fig.savefig(f'{DATADIR}/plots/{icao}_busts.png')
         plt.close()
+
+
+
+def sample_shades(cmap_name, n, low=0.30, high=0.95):
+    """
+    Sample 'n' visually distinct hex colors from a sequential colormap,
+    avoiding extremes that are too dark/light.
+    """
+    cmap = matplotlib.colormaps[cmap_name]
+    vals = np.linspace(low, high, n)
+    return [colors.to_hex(cmap(v)) for v in vals]
+
 
 
 if __name__ == "__main__":
