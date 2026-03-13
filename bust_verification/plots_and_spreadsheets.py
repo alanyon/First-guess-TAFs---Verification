@@ -392,10 +392,10 @@ def plot_summary(summary_stats):
 
     # Add scores on top of bars
     for ind in ax.containers:
-        ax.bar_label(ind, fontsize=12)
+        ax.bar_label(ind, fontsize=8)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=18)
+    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=16)
     ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
     ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
     ax.tick_params(axis='x', labelsize=14)

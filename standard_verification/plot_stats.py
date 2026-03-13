@@ -36,8 +36,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
-from scipy import stats
 
 # Set plotting style
 sns.set_style('darkgrid')
@@ -848,11 +846,11 @@ def sp_box_plot(stats_dict, param):
     # Map categories to names in CATS dictionary
     plot_stats['Category'] = plot_stats['Category'].map(CATS[param])
 
-    # Remove rows with Random Forest
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
+    # # Remove rows with Random Forest
+    # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(15, 6))
 
     # Create box plot
     sp_box = sns.boxplot(data=plot_stats, x='Category', y='Peirce Skill Score',
@@ -867,7 +865,7 @@ def sp_box_plot(stats_dict, param):
     ax.set_xlabel('TAF Category', weight='bold')
     ax.set_ylabel('Peirce Skill Score', weight='bold')
     ax.tick_params(axis='x', labelsize=15)
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1), fontsize=14)
     plt.setp(sp_box.get_legend().get_title(), weight='bold')
     plt.setp(ax.get_xticklabels(), fontsize=13)
 
@@ -926,11 +924,11 @@ def g_box_plot(all_stats):
     # Create dataframe from data
     plot_stats = pd.DataFrame(p_stats)
 
-    # Remove rows with Random Forest
-    plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
+    # # Remove rows with Random Forest
+    # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
 
     # Create box plot
     g_box = sns.boxplot(data=plot_stats, x='Parameter', 

@@ -137,6 +137,8 @@ def main():
             # Add to all info dictionaries
             update_infos(holders, icao, icao_tafs, icao_busts)
 
+    exit()
+
     # Write data to Excel files
     for icao in icao_dict:
         write_to_excel(holders, icao, taf_dir)
