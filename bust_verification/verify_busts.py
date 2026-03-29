@@ -430,7 +430,7 @@ def get_holders(load_data):
     """
     # Load in pickled data if required
     if load_data != 'yes':
-        return {name: uf.unpickle_data(f'{cf.D_DIR}/pickles_2/{name}')
+        return {name: uf.unpickle_data(f'{cf.D_DIR}/pickles_3/{name}')
                 for name in cf.NAMES}
 
     # Otherwise, create empty dictionaries
@@ -555,7 +555,6 @@ def get_new_data(holders, load_data):
         # Find all IMPROVER TAFs valid on this day
         auto_tafs = [get_day_tafs(day, lines) for lines in auto_tafs_lines]
 
-
         # If no TAFs found, move to next day
         if not all(auto_tafs):
             continue
@@ -577,7 +576,7 @@ def get_new_data(holders, load_data):
 
         # Pickle at the end of each day in case something breaks
         for name, data in holders.items():
-            uf.pickle_data(data, f'{cf.D_DIR}/pickles_2/{name}')
+            uf.pickle_data(data, f'{cf.D_DIR}/pickles_3/{name}')
 
 
 def get_taf_length(taf):

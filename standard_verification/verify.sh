@@ -2,9 +2,9 @@
 #SBATCH --partition=cpu-long
 #SBATCH --mem=2G
 #SBATCH --ntasks=4
-#SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test2.out
+#SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test3.out
 #SBATCH --time=3000
-#SBATCH --error=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test2.err
+#SBATCH --error=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test3.err
 
 # Load in constants 
 source setup_constants.sh

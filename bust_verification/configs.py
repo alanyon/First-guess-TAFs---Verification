@@ -54,29 +54,9 @@ P_NAMES = {'vis': 'Visibility', 'wind': 'Wind', 'wx': 'Significant Weather',
            'cld': 'Cloud Base', 'all': 'All'}
 
 # ICAOS to use
-REQ_ICAOS = [b'EGAA ', b'EGAC ', b'EGAE ', b'EGBB ', b'EGBJ ', b'EGCC ', 
-             b'EGCK ', b'EGFF ', b'EGGD ', b'EGGP ', b'EGGW ', b'EGHH ', 
-             b'EGHI ', b'EGKB ', b'EGKK ', b'EGLC ', b'EGLF ', b'EGLL ', 
-             b'EGMC ', b'EGMD ', b'EGNH ', b'EGNJ ', b'EGNM ', b'EGNR ', 
-             b'EGNT ', b'EGNV ', b'EGNX ', b'EGPA ', b'EGPB ', b'EGPC ', 
-             b'EGPD ', b'EGPE ', b'EGPF ', b'EGPH ', b'EGPI ', b'EGPK ', 
-             b'EGPN ', b'EGPO ', b'EGPU ', b'EGSH ', b'EGSS ', b'EGTE ',
-             b'EGTK ', b'EGHQ ']
-REQ_ICAO_STRS = {
-    'EGAA': 'Belfast International', 'EGAC': 'Belfast City', 
-    'EGAE': 'Londonderry', 'EGBB': 'Birmingham', 'EGBJ': 'Gloucester',
-    'EGCC': 'Manchester Ringway', 'EGCK': 'Caenarfon', 'EGFF': 'Cardiff', 
-    'EGGD': 'Bristol', 'EGGP': 'Liverpool', 'EGGW': 'Luton', 
-    'EGHH': 'Bournemouth', 'EGHI': 'Southampton', 'EGKB': 'Biggin Hill', 
-    'EGKK': 'Gatwick', 'EGLC': 'London City', 'EGLF': 'Farnborough',
-    'EGLL': 'Heathrow', 'EGMC': 'Southend', 'EGMD': 'Lydd',
-    'EGNH': 'Blackpool', 'EGNJ': 'Humberside', 'EGNM': 'Leeds Bradford', 
-    'EGNR': 'Hawarden', 'EGNT': 'Newcastle', 'EGNV': 'Durham Teeside',
-    'EGNX': 'East Midlands', 'EGPA': 'Kirkwall', 'EGPB': 'Sumburgh', 
-    'EGPC': 'Wick', 'EGPD': 'Aberdeen', 'EGPE': 'Inverness', 'EGPF': 'Glasgow',
-    'EGPH': 'Edinburgh', 'EGPI': 'Islay', 'EGPK': 'Prestwick', 
-    'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
-    'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford', 'EGHQ': 'Newquay'}
+REQ_ICAOS = [b'EGCC ', b'EGKK ', b'EGLL ']
+REQ_ICAO_STRS = {'EGCC': 'Manchester Ringway', 'EGKK': 'Gatwick', 
+                 'EGLL': 'Heathrow'}
 
 NINE_HR_STRS = {
     'EGAC': 'Belfast City', 'EGAE': 'Londonderry', 'EGBJ': 'Gloucester',
