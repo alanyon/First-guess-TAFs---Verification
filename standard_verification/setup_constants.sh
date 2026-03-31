@@ -1,20 +1,17 @@
 # This script sets up the constants for the verification process.
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260123_ml
+VER_DATES=20230805-20260123_ml_new
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
-export TAF_TYPES="no_pes_old xgboost_no_pes_new random_forest_no_pes_new \
-                  no_opt_old xgboost_no_opt_new random_forest_no_opt_new \
+export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new \
                   Manual_ml"
-export TAF_TYPES_SHORT="p1 p2 p3 o1 o2 o3 ma"
+export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
 export COMBS="p2ma o2ma o2p2 p2p3 o2o3"
 export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs (without ML)",
-                     "p2": "Pessimistic Auto TAFs (with ML - XGBoost)",
-                     "p3": "Pessimistic Auto TAFs (with ML - Random Forest)",
+                     "p2": "Pessimistic Auto TAFs (with ML)",
                      "o1": "Optimistic Auto TAFs (without ML)",
-                     "o2": "Optimistic Auto TAFs (with ML - XGBoost)",
-                     "o3": "Optimistic Auto TAFs (with ML - Random Forest)",
+                     "o2": "Optimistic Auto TAFs (with ML)",
                      "ma": "Manual TAFs"}'
 export PYTHONPATH=~clare.bysouth/VerPy/stable
 export ORACLE_OWNER=oracle
