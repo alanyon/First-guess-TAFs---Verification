@@ -1,12 +1,12 @@
 # This script sets up the constants for the verification process.
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260123_ml
+VER_DATES=20230805-20260123_ml_new
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
 export TAF_TYPES="opt_all pes_all Manual"
 export TAF_TYPES_SHORT="op pe ma"
-export COMBS="auma"
+export COMBS="opma pema oppe"
 export PLOT_TITLES='{"op": "Auto TAFs (Optimistic)",
                      "pe": "Auto TAFs (Pessimistic)",
                      "ma": "Manual TAFs"}'
