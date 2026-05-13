@@ -386,20 +386,20 @@ def plot_summary(summary_stats):
         None
     """
     # Create bar plot
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(14, 12))
     sns.barplot(data=summary_stats, x='Number of Busts', y='Bust Type',
                 hue='TAF Type')
 
     # Add scores on top of bars
     for ind in ax.containers:
-        ax.bar_label(ind, fontsize=8)
+        ax.bar_label(ind, fontsize=12)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=16)
-    ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
-    ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
+    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=18)
+    ax.set_xlabel('Number of Busts', fontsize=24, weight='bold')
+    ax.set_ylabel('Bust Type', fontsize=24, weight='bold')
     ax.tick_params(axis='x', labelsize=14)
-    ax.tick_params(axis='y', labelsize=14)
+    ax.tick_params(axis='y', labelsize=19)
 
     # Save and close figure
     plt.tight_layout()

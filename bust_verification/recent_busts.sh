@@ -7,6 +7,7 @@ export PYTHONPATH=$PYTHONPATH:/home/users/andre.lanyon/first_guess_tafs/First-gu
 export CYCLE_TIME=2026030600
 export OUTDIR=/home/users/andre.lanyon/public_html/tafs
 export DATA_DIR=/data/users/andre.lanyon/tafs/recent_busts
+export PLOT_DIR=/home/users/andre.lanyon/public_html/tafs/bust_plots
 
 # python recent_busts.py
 python verify_recent_busts.py

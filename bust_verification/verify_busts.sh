@@ -15,4 +15,4 @@ conda activate default_clone_nov_2025
 export PYTHONPATH=$PYTHONPATH:~andre.lanyon/python 
 export PYTHONPATH=$PYTHONPATH:/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/taf_monitor
 
-python verify_busts.py yes
+python verify_busts.py no

@@ -7,11 +7,11 @@ export DECODE_DIR=${DATA_DIR}/decodes
 export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new \
                   Manual_ml"
 export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
-export COMBS="p2ma o2ma o2p2 p2p3 o2o3"
-export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs (without ML)",
-                     "p2": "Pessimistic Auto TAFs (with ML)",
-                     "o1": "Optimistic Auto TAFs (without ML)",
-                     "o2": "Optimistic Auto TAFs (with ML)",
+export COMBS="p2ma o2ma o2p2"
+export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs\n(without ML)",
+                     "p2": "Pessimistic Auto TAFs\n(with ML)",
+                     "o1": "Optimistic Auto TAFs\n(without ML)",
+                     "o2": "Optimistic Auto TAFs\n(with ML)",
                      "ma": "Manual TAFs"}'
 export PYTHONPATH=~clare.bysouth/VerPy/stable
 export ORACLE_OWNER=oracle

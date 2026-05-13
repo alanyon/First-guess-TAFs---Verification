@@ -12,6 +12,7 @@ import pandas as pd
 
 # Define constants
 DATADIR = os.environ['DATA_DIR']
+PLOT_DIR = os.environ['PLOT_DIR']
 TAF_TYPES = {
     'auto_opt': 'Optimistic Auto TAFs\n(no ML)',
     'auto_opt_up_1': 'Optimistic Auto TAFs\n(no ML) - Obs Update 1',
@@ -109,7 +110,7 @@ def main():
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{DATADIR}/plots/summary_busts.png')
+    fig.savefig(f'{PLOT_DIR}/summary_busts.png')
     plt.close()
 
     # Make plots for each airport
@@ -136,7 +137,7 @@ def main():
 
         # Save and close figure
         plt.tight_layout()
-        fig.savefig(f'{DATADIR}/plots/{icao}_busts.png')
+        fig.savefig(f'{PLOT_DIR}/{icao}_busts.png')
         plt.close()
 
 
