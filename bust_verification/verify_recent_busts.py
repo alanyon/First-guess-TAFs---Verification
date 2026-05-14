@@ -1,4 +1,3 @@
-
 import os
 import pickle
 import numpy as np
@@ -7,6 +6,7 @@ from matplotlib import colors
 import matplotlib.pyplot as plt
 import seaborn as sns
 from copy import deepcopy
+from datetime import datetime
 
 import pandas as pd
 
@@ -49,12 +49,14 @@ def main():
     # To collect overall stats for each icao
     icao_stats = {}
 
+    # Collect dates from filenames
+    vdts = []
+
     # Loop through files in the data directory
     for filename in os.listdir(DATADIR):
 
-        # Ignore plots directory
-        if 'plots' in filename:
-            continue
+        # Get the date from the filename and add to list
+        vdts.append(datetime.strptime(filename, '%Y%m%d.pkl'))
 
         # Unpickle the file
         with open(os.path.join(DATADIR, filename), 'rb') as f:
@@ -92,21 +94,28 @@ def main():
     palette_13 = blues6 + reds6 + green1
 
     # Create bar plot
-    fig, ax = plt.subplots(figsize=(16, 10))
-    sns.barplot(data=stats_df, x='Number of Busts', y='Bust Type',
-                hue='TAF Type', palette=palette_13, estimator=sum, errorbar=None, 
-                ax=ax)
+    fig, ax = plt.subplots(figsize=(16, 8))
+    sns.barplot(data=stats_df, x='Bust Type', y='Number of Busts',
+                hue='TAF Type', palette=palette_13, estimator=sum, 
+                errorbar=None, ax=ax)
+    
+    # Build title from first and last dates in vdts list
+    vdts.sort()
+    start_date = vdts[0].strftime('%d/%m/%Y')
+    end_date = vdts[-1].strftime('%d/%m/%Y')
+    title = f'Busts From {start_date} to {end_date}'
+    ax.set_title(f'All {title}', fontsize=24, weight='bold')
     
     # Add scores on top of bars
     for ind in ax.containers:
-        ax.bar_label(ind, fontsize=8)
+        ax.bar_label(ind, fontsize=9, rotation=90, padding=2)
 
     # Format axes, etc
-    ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=15)
+    ax.legend(loc='upper left', bbox_to_anchor=(1.03, 1), fontsize=14)
     ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
     ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
-    ax.tick_params(axis='x', labelsize=14)
-    ax.tick_params(axis='y', labelsize=14)
+    ax.tick_params(axis='x', labelsize=15)
+    ax.tick_params(axis='y', labelsize=15)
 
     # Save and close figure
     plt.tight_layout()
@@ -119,21 +128,21 @@ def main():
         stats_df_icao = stats_df[stats_df['Airport'] == icao_dict[icao]]
 
         # Create bar plot
-        fig, ax = plt.subplots(figsize=(16, 10))
-        sns.barplot(data=stats_df_icao, x='Number of Busts', y='Bust Type',
+        fig, ax = plt.subplots(figsize=(16, 8))
+        sns.barplot(data=stats_df_icao, x='Bust Type', y='Number of Busts',
                     palette=palette_13, hue='TAF Type', ax=ax)
         
         # Add scores on top of bars
         for ind in ax.containers:
-            ax.bar_label(ind, fontsize=8)
+            ax.bar_label(ind, fontsize=9, rotation=90, padding=2)
 
         # Format axes, etc
-        ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=15)
+        ax.legend(loc='upper left', bbox_to_anchor=(1.03, 1), fontsize=14)
         ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
         ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
-        ax.tick_params(axis='x', labelsize=14)
-        ax.tick_params(axis='y', labelsize=14)
-        ax.set_title(f'{icao_dict[icao]} Busts', fontsize=24, weight='bold')
+        ax.tick_params(axis='x', labelsize=15)
+        ax.tick_params(axis='y', labelsize=15)
+        ax.set_title(f'{icao_dict[icao]} {title}', fontsize=24, weight='bold')
 
         # Save and close figure
         plt.tight_layout()

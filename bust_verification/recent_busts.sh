@@ -4,7 +4,7 @@
 conda activate default_clone_nov_2025
 
 export PYTHONPATH=$PYTHONPATH:/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/taf_monitor
-export CYCLE_TIME=2026030600
+export CYCLE_TIME=2026051400
 export OUTDIR=/home/users/andre.lanyon/public_html/tafs
 export DATA_DIR=/data/users/andre.lanyon/tafs/recent_busts
 export PLOT_DIR=/home/users/andre.lanyon/public_html/tafs/bust_plots
