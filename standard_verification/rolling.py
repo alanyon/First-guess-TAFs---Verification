@@ -11,7 +11,8 @@ DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 CYCLE_DATE = os.environ['CYCLE_DATE']
 # Load in airport info
-AIRPORT_INFO = pd.read_csv(f'{DATA_DIR}/taf_info.csv', header=0)
+AIRPORT_INFO = pd.read_csv(f'{DATA_DIR}/standard_verification/taf_info.csv', 
+                           header=0)
 
 
 def main():
