@@ -11,7 +11,7 @@ DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 CYCLE_DATE = os.environ['CYCLE_DATE']
 # Load in airport info
-AIRPORT_INFO = pd.read_csv('taf_info.csv', header=0)
+AIRPORT_INFO = pd.read_csv(f'{DATA_DIR}/taf_info.csv', header=0)
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
             
         except Exception as e:
             print(f"Error processing ICAO {row['icao']}: {e}")
-            
+
 
 def calc_scores(row, start_dt, end_dt):
 
