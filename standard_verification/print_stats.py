@@ -3,6 +3,8 @@ import csv
 import glob
 import os
 import sys
+import pandas as pd
+from datetime import datetime, timedelta
 
 import numpy as np
 import VerPy as ver
@@ -12,10 +14,9 @@ import xarray
 STATS_DIR = os.environ['STATS_DIR']
 DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
-VERIF_START = os.environ['VERIF_START']
-VERIF_END = os.environ['VERIF_END']
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
+CYCLE_DATE = os.environ['CYCLE_DATE']
 
 
 def print_ct(con_table):
@@ -31,39 +32,37 @@ def print_ct(con_table):
     fcs_freqs = total_fcs / total_all
     obs_freqs = total_obs / total_all
     # Header
-    print(line)
-    print(' ' * 11 + ''.join([f'OB cat {i+1}     ' for i in range(cats)]) +
-          'Total')
-    print(line)
+    # print(line)
+    # print(' ' * 11 + ''.join([f'OB cat {i+1}     ' for i in range(cats)]) +
+    #       'Total')
+    # print(line)
 
-    # Rows
-    for i in range(cats):
-        print(f'FC cat {i + 1}   ' +
-              ''.join([f'{val:<13}' for val in np.round(con_table[i], 2)]) +
-              f'{np.round(total_fcs[i]):<13}')
+    # # Rows
+    # for i in range(cats):
+    #     print(f'FC cat {i + 1}   ' +
+    #           ''.join([f'{val:<13}' for val in np.round(con_table[i], 2)]) +
+    #           f'{np.round(total_fcs[i]):<13}')
 
-    # Totals
-    print(line)
-    print('Total      ' +
-          ''.join([f'{val:<13}' for val in np.round(total_obs, 2)]) +
-          f'{np.round(total_all):<13}')
-    print(line)
+    # # Totals
+    # print(line)
+    # print('Total      ' +
+    #       ''.join([f'{val:<13}' for val in np.round(total_obs, 2)]) +
+    #       f'{np.round(total_all):<13}')
+    # print(line)
 
     return fcs_freqs, obs_freqs
 
-def main(param, station, unc):
+def main(param, station, start, end):
     '''Extract data, equalize and mean before printing'''
+    # print('param is ', param)
+    # print('station is ', station)
 
     # Concatenate monthly files together
     source_list = []
     for taf_type in TAF_TYPES:
         datadir = f'{DATA_DIR}/{taf_type}'
-        source = os.path.join(datadir, '{}_*_{}{}.nc'.format(station,
-                                                             param.lower(),
-                                                             unc))
-        new_source = os.path.join(datadir, '{}_{}.nc'.format(station,
-                                                             param.lower(),
-                                                             unc))
+        source = os.path.join(datadir, '{}_*_{}.nc'.format(station, param))
+        new_source = os.path.join(datadir, '{}_{}.nc'.format(station, param))
 
         dsr = xarray.open_mfdataset(source)
         dsr.to_netcdf(new_source)
@@ -75,8 +74,8 @@ def main(param, station, unc):
         'type'  : 'netcdf',
         'truth' : 10000,
         'source': source_list,
-        'start' : VERIF_START,
-        'end'   : VERIF_END}
+        'start' : start,
+        'end'   : end}
 
     subjobs = ver.job.run('.', opts)
 
@@ -84,8 +83,8 @@ def main(param, station, unc):
 
     # Fill in missing TAFs with NaNs
     for case in cases:
-        dts = ver.dt.get_all_datetimes(ver.dt.Datetime(VERIF_START),
-                                       ver.dt.Datetime(VERIF_END),
+        dts = ver.dt.get_all_datetimes(ver.dt.Datetime(start),
+                                       ver.dt.Datetime(end),
                                        range(0, 2400, 100))
         if not np.all(dts == case.data.dates):
             # Find missing datetimes
@@ -100,13 +99,16 @@ def main(param, station, unc):
     # Equalize
     cases = ver.data.equalize(cases)
 
+    gerrity_scores = {}
+    peirce_scores = {}
+
     for case, taf_type in zip(cases, TAF_TYPES):
 
-        print('')
-        print('TAF type: ', taf_type)
-        print('Station is ', station)
-        print('Param is ', param.lower())
-        print('')
+        # print('')
+        # print('TAF type: ', taf_type)
+        # print('Station is ', station)
+        # print('Param is ', param)
+        # print('')
 
         # Mean over all dates
         case.data.mean_all_dates()
@@ -122,37 +124,22 @@ def main(param, station, unc):
 
         big_peirce, gerrity = list(cat_stats.vals.flatten())
 
-        print('')
-        print('Gerrity score is ', np.round(gerrity, 2))
-        print('Big peirce score is ', np.round(big_peirce, 2))
+        # print('')
+        # print('Gerrity score is ', np.round(gerrity, 2))
+        # print('Big peirce score is ', np.round(big_peirce, 2))
 
         # Get Peirce skill scores for each category
         case.data = convert_to_1vsAll_2x2(case.data)
         req_stats = [ver.stats.get_statistic(7908)]
         peirce = ver.stats.derived.calc_stats(case.data, req_stats)
         peirce_vals = list(peirce.vals.flatten())
-        print('Small peirce scores are ', np.round(peirce_vals, 2))
-        print('Mean small peirce score is', np.round(np.mean(peirce_vals), 2))
+        # print('Small peirce scores are ', np.round(peirce_vals, 2))
+        # print('Mean small peirce score is', np.round(np.mean(peirce_vals), 2))
 
-        # Lists for csv file
-        gerrity_scores = [station, 'gerrity', taf_type, gerrity]
-        big_peirce_scores = [station, 'big_peirce', taf_type, big_peirce]
-        peirce_scores = [station, 'peirce', taf_type] + peirce_vals
-        freqs = ([station, 'freqs', taf_type] +
-                 [fcs_freq for fcs_freq in fcs_freqs] +
-                 [obs_freq for obs_freq in obs_freqs])
-        ct_vals_list = ([station, 'ctvals', taf_type] +
-                        [val for val in ct_vals.flatten('F')])
+        gerrity_scores[taf_type] = gerrity
+        peirce_scores[taf_type] = peirce_vals
 
-        # Write stats to csv file
-        stats_file = (f'{STATS_DIR}/{param.lower()}_stats_{TAF_TYPES_FNAME}'
-                      f'{unc}.csv')
-        open_stats_file = open(stats_file, 'a')
-        with open_stats_file:
-
-            writer = csv.writer(open_stats_file)
-            writer.writerows([gerrity_scores, big_peirce_scores, peirce_scores,
-                              freqs, ct_vals_list])
+    return gerrity_scores, peirce_scores
 
 
 def convert_to_1vsAll_2x2(dat):
@@ -205,10 +192,3 @@ def convert_to_1vsAll_2x2(dat):
 
     return dat
 
-
-if __name__ == '__main__':
-
-    station = sys.argv[1]
-    for param in ['VIS', 'CLB']:
-        main(param, station, '')
-        # main(param, station, '_unc')

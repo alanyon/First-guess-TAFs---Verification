@@ -111,14 +111,6 @@ def get_arguments():
     parser.add_argument('verpy_clb_out', metavar='verpy_clb_out', type=
                         lambda x: x,
                         help='netcdf filename for clb')
-    parser.add_argument('verpy_vis_uncertainty_out',
-                        metavar='verpy_vis_uncertainty_out',
-                        type=lambda x: x,
-                        help='database filename for vis_uncertainty')
-    parser.add_argument('verpy_clb_uncertainty_out',
-                        metavar='verpy_clb_uncertainty_out',
-                        type=lambda x: x,
-                        help='database filename for clb_uncertainty')
     parser.add_argument('config_file', metavar='config_file',
                         help='Configuration file')
 
@@ -129,7 +121,7 @@ def get_arguments():
     # List the default elements that need evaluation because they are not strings
     evalelements = ('extract_lookahead','sql_debug','vis_cats','clb_cats',
                     'ft_to_m','use_autometars','use_specis','probbins',
-                    'probbins_uncertainty', 'metars_per_hour')
+                    'metars_per_hour')
     for elem in defaults:
         if elem in evalelements:
             defaults[elem]=eval(defaults[elem])
@@ -215,8 +207,6 @@ def main(args):
     # Determine each TAF's reliability table
     tafs_  = []
     failed = []
-    tafs_uncertainty_ = []
-    failed_uncertainty = []
     for taf in tafs:
         try:
             taf.construct_rt(None, raw_tafs, args)
@@ -228,27 +218,13 @@ def main(args):
             print(err)
             print('Rejected: {}'.format(taf))
             failed.append(taf)
-        try:
-            taf.construct_rt_uncertainty(None, raw_tafs, args)
-            tafs_uncertainty_.append(taf)
-            print('Accepted: {} for uncertainty calculations'.format(taf))
-        except (rt.TAFTooComplexError, rt.TAFNoMETARsError,
-                rt.TAFWrongLengthError, rt.TAFNoLastHrMETARsError,
-                rt.TAFTwoHourMETARGapError) as err:
-            print(err)
-            print('Rejected: {} for uncertainty calculations'.format(taf))
-            failed_uncertainty.append(taf)
 
     tafs = tafs_
-    tafs_uncertainty = tafs_uncertainty_
 
     # Save these into PickleDBs
     save.save(tafs, args)
-    save.save(tafs_uncertainty, args, uncertainty=True)
 
     print('{} TAFs processed, {} TAFs ignored'.format(len(tafs), len(failed)))
-    print('{} TAFs processed, {} TAFs ignored for uncertainty calculations'
-          .format(len(tafs_uncertainty), len(failed_uncertainty)))
     print('Finished')
 
 

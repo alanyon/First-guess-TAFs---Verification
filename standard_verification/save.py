@@ -16,7 +16,7 @@ import numpy
 from VerPy import case, data, dt, netcdf, options, parameter, station, stats
 
 
-def save(tafs, args, uncertainty=False):
+def save(tafs, args):
     """
     Create two data instances and save them to disk.
     """
@@ -25,7 +25,7 @@ def save(tafs, args, uncertainty=False):
     vis_data = None
     clb_data = None
     for taf in tafs:
-        dat = to_data(taf, uncertainty)
+        dat = to_data(taf)
         if taf.parameter == 'VIS':
             if vis_data is None:
                 vis_data = dat
@@ -56,16 +56,10 @@ def save(tafs, args, uncertainty=False):
     clb_case = case.Case(opts=opts, data=clb_data)
 
     # Save cases
-    if uncertainty:
-        writer.write(args.verpy_vis_uncertainty_out, [vis_case],
-                     overwrite=False)
-        writer.write(args.verpy_clb_uncertainty_out, [clb_case],
-                     overwrite=False)
-    else:
-        writer.write(args.verpy_vis_out, [vis_case], overwrite=False)
-        writer.write(args.verpy_clb_out, [clb_case], overwrite=False)
+    writer.write(args.verpy_vis_out, [vis_case], overwrite=False)
+    writer.write(args.verpy_clb_out, [clb_case], overwrite=False)
 
-def to_data(taf, uncertainty):
+def to_data(taf):
     """
     Generates a VerPy Data instance representing this TAF's RT.
     """
@@ -79,13 +73,10 @@ def to_data(taf, uncertainty):
     cats  = [str(cat) for cat in taf.cats]
 
     # Get empty Data instance
-    if uncertainty:
-        probbins = list(taf.probs_uncertainty)
-    else:
-        probbins = list(taf.probs)
+    probbins = list(taf.probs)
     dat = data.Data(stats=[stat], params=[param], dates=[date],
-                        ob_cats=cats, fc_cats=cats, stations=[site],
-                        probbins=probbins, nan_vals=True)
+                    ob_cats=cats, fc_cats=cats, stations=[site],
+                    probbins=probbins, nan_vals=True)
 
     # Confirm that assumed dimension order matches that of data instance
     assert (dat.dims.index('fc_cats') <
@@ -93,10 +84,7 @@ def to_data(taf, uncertainty):
             dat.dims.index('probbins'))
 
     # Reshape the value array to include parameters, etc.
-    if uncertainty:
-        dat.vals = taf.obs_uncertainty.reshape(dat.vals.shape)
-    else:
-        dat.vals = taf.obs.reshape(dat.vals.shape)
+    dat.vals = taf.obs.reshape(dat.vals.shape)
 
     return rel_table_to_con_table(dat)
 
