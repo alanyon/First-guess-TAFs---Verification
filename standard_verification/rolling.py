@@ -37,9 +37,14 @@ def main():
     # Loop through airport info dataframe to get ICAOs
     for _, row in AIRPORT_INFO.iterrows():
 
-        # Calculate scores and add to csv file
-        calc_scores(row, start_dt, end_dt)
+        try:
 
+            # Calculate scores and add to csv file
+            calc_scores(row, start_dt, end_dt)
+            
+        except Exception as e:
+            print(f"Error processing ICAO {row['icao']}: {e}")
+            
 
 def calc_scores(row, start_dt, end_dt):
 

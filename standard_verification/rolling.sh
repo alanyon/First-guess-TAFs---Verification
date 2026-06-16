@@ -2,6 +2,7 @@
 
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/current
 export STATS_DIR=${DATA_DIR}/stats
+export OUT_DIR=/home/users/andre.lanyon/public_html/tafs/output/
 export TAF_TYPES="opt_no_obs_ml opt_no_obs opt_obs_update_1_ml opt_obs_update_1 \
                   opt_obs_update_2_ml opt_obs_update_2 pes_no_obs_ml pes_no_obs \
                   pes_obs_update_1_ml pes_obs_update_1 pes_obs_update_2_ml pes_obs_update_2 \
