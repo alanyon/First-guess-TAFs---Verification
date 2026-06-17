@@ -95,12 +95,10 @@ def calc_scores(row, start_dt, end_dt):
         config_file = f'{DATA_DIR}/{taf_type}.cfg'
 
         # Call driver code
-        with open(out_file, "a") as f:
-            dv.main_from_params(start_dt=start_dt, end_dt=end_dt,
-                                sitelist=[icao],
-                                ver_period=timedelta(hours=int(length)),
-                                verpy_vis_out=vis_file, verpy_clb_out=clb_file,
-                                config_file=config_file)
+        dv.main_from_params(start_dt=start_dt, end_dt=end_dt, sitelist=[icao],
+                            ver_period=timedelta(hours=int(length)),
+                            verpy_vis_out=vis_file, verpy_clb_out=clb_file,
+                            config_file=config_file)
 
     # Calculate scores
     gerrity_vis, peirce_vis = ps.main('vis', icao, start_str, end_str)
@@ -339,4 +337,3 @@ def update_configs_make_dirs(all_tafs):
 
 if __name__ == "__main__":
     main()
-    
