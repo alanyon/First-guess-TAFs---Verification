@@ -6,6 +6,7 @@ import pickle
 
 import print_stats as ps
 import TAFDecode_tafs as td
+import driver as dv
 
 
 OUT_DIR = os.environ['OUT_DIR']
@@ -45,21 +46,19 @@ def main():
     # Loop through airport info dataframe to get ICAOs
     for _, row in AIRPORT_INFO.iterrows():
 
-        try:
+        # try:
 
-            # Calculate scores and add to csv file
-            calc_scores(row, start_dt, end_dt)
+        # Calculate scores and add to csv file
+        calc_scores(row, start_dt, end_dt)
             
-        except Exception as e:
-            print(f"Error processing ICAO {row['icao']}: {e}")
+        # except Exception as e:
+        #     print(f"Error processing ICAO {row['icao']}: {e}")
 
 
 def calc_scores(row, start_dt, end_dt):
 
-    start = start_dt.strftime('%Y%m%d0000')
-    end = end_dt.strftime('%Y%m%d2359')
-    start_short = start_dt.strftime('%Y%m%d')
-    end_short = end_dt.strftime('%Y%m%d')
+    start_str = start_dt.strftime('%Y%m%d')
+    end_str = end_dt.strftime('%Y%m%d')
 
     icao = row['icao']
     length = str(row['taf_len'])
@@ -70,7 +69,7 @@ def calc_scores(row, start_dt, end_dt):
         out_file = f'{out_dir}/{icao}.out'
         vis_file = f'{out_dir}/{icao}_90_vis.nc'
         clb_file = f'{out_dir}/{icao}_90_clb.nc'
-        config_file = f'{taf_type}.cfg'
+        config_file = f'{DATA_DIR}/{taf_type}.cfg'
         
         # Write start timestamp
         with open(out_file, "w") as f:
@@ -78,20 +77,22 @@ def calc_scores(row, start_dt, end_dt):
 
         # Call driver code
         with open(out_file, "a") as f:
-            subprocess.run(['python', 'driver.py', start, end, icao, length, 
-                            vis_file, clb_file, config_file], stdout=f, 
-                           stderr=f, text=True)
+            dv.main_from_params(start_dt=start_dt, end_dt=end_dt, 
+                                sitelist=[icao], 
+                                ver_period=timedelta(hours=int(length)), 
+                                verpy_vis_out=vis_file, verpy_clb_out=clb_file, 
+                                config_file=config_file)
 
         # Write end timestamp
         with open(out_file, "a") as f:
             f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
 
     # Calculate scores
-    gerrity_vis, peirce_vis = ps.main('vis', icao, start_short, end_short)
-    gerrity_clb, peirce_clb = ps.main('clb', icao, start_short, end_short)
+    gerrity_vis, peirce_vis = ps.main('vis', icao, start_str, end_str)
+    gerrity_clb, peirce_clb = ps.main('clb', icao, start_str, end_str)
 
     # Create dataframe to hold scores
-    scores = {'Date': [end_short]}
+    scores = {'Date': [end_str]}
     for s_name_score, score in gerrity_vis.items():
         scores[f'gerrity_vis_{s_name_score}'] = [score]
     for s_name_score, score in gerrity_clb.items():
@@ -286,7 +287,7 @@ def update_configs_make_dirs(all_tafs):
                  'metars_per_hour = 2\n']
 
         # Write lines to config file
-        with open(f'{t_type}.cfg', 'w') as t_file:
+        with open(f'{DATA_DIR}/{t_type}.cfg', 'w') as t_file:
             t_file.writelines(lines)
 
 

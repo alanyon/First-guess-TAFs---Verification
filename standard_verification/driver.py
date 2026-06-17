@@ -6,8 +6,6 @@ driver.py
 
 This module provides the argument parser and main function for
 analysing a sample of TAFs.
-
-------------------------------------------------------------------------
 """
 
 import argparse
@@ -21,32 +19,19 @@ import save
 
 
 class Problist(list):
-    """
-    An extension to the `list` type which overrides the `index()` method,
-    by only testing for approximate equality.
-    """
     def index(self, prob):
         for i, p in enumerate(self):
             if abs(p - prob) < 0.001:
                 return i
         raise ValueError('{} is not in list'.format(prob))
 
+
 class Category(object):
-    """
-    Category class containing:
-    - upper bound of each category (.ubound)
-    - lower bound of each category (.lbound)
-    It uses .from_thresh if there is a list of categroies in the config file
-    """
     def __init__(self, lbound, ubound):
-        """Set the lower and upper bounds to this category"""
         self.lbound = lbound
         self.ubound = ubound
 
     def __eq__(self, val):
-        """
-        Determine whether val is within a category
-        """
         if np.isinf(val) and np.isinf(self.ubound):
             return True
         return self.lbound <= val < self.ubound
@@ -64,16 +49,12 @@ class Category(object):
 
     @classmethod
     def from_thresh(cls, thresh):
-        """
-        When more than one upper and lower bound exists create an
-        object containing the Category class for all categories
-        """
         cats = []
-        for i in range(len(thresh)+1):
+        for i in range(len(thresh) + 1):
             if i == 0:
                 lbound = 0
             else:
-                lbound = thresh[i-1]
+                lbound = thresh[i - 1]
             if i == len(thresh):
                 ubound = float('inf')
             else:
@@ -83,59 +64,38 @@ class Category(object):
 
 
 def get_arguments():
-    """
-    Parse command line arguments and return the namespace containing the
-    given variables.
-    """
-
-    # Create parser with defaults
     parser = argparse.ArgumentParser(description='Script to form multi-'
                                      'category reliability tables for TAFs')
 
-    # Define required positional arguments
     parser.add_argument('start_dt', metavar='start_date_time', type=
-                        lambda x: datetime.datetime.strptime(x, '%Y%m%d%H%M'),
-                        help='start date and time (YYYYmmddHHMM)')
+                        lambda x: datetime.datetime.strptime(x, '%Y%m%d%H%M'))
     parser.add_argument('end_dt', metavar='end_date_time', type=
-                        lambda x: datetime.datetime.strptime(x, '%Y%m%d%H%M'),
-                        help='end date and time (YYYYmmddHHMM)')
-    parser.add_argument('sitelist', metavar='station', type=
-                        lambda x: [x],
-                        help='station (EGXX)')
-    parser.add_argument('ver_period', metavar='ver_period', type=
-                        lambda x: datetime.timedelta(hours=int(x)),
-                        help='verification period (hours)')
-    parser.add_argument('verpy_vis_out', metavar='verpy_vis_out', type=
-                        lambda x: x,
-                        help='netcdf filename for vis')
-    parser.add_argument('verpy_clb_out', metavar='verpy_clb_out', type=
-                        lambda x: x,
-                        help='netcdf filename for clb')
-    parser.add_argument('config_file', metavar='config_file',
-                        help='Configuration file')
+                        lambda x: datetime.datetime.strptime(x, '%Y%m%d%H%M'))
+    parser.add_argument('sitelist', metavar='station', type=lambda x: [x])
+    parser.add_argument('ver_period', metavar='ver_period',
+                        type=lambda x: datetime.timedelta(hours=int(x)))
+    parser.add_argument('verpy_vis_out', metavar='verpy_vis_out')
+    parser.add_argument('verpy_clb_out', metavar='verpy_clb_out')
+    parser.add_argument('config_file', metavar='config_file')
 
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config_file)
     defaults = dict(config.items("defaults"))
-    # List the default elements that need evaluation because they are not strings
-    evalelements = ('extract_lookahead','sql_debug','vis_cats','clb_cats',
-                    'ft_to_m','use_autometars','use_specis','probbins',
+
+    evalelements = ('extract_lookahead', 'sql_debug', 'vis_cats', 'clb_cats',
+                    'ft_to_m', 'use_autometars', 'use_specis', 'probbins',
                     'metars_per_hour')
+
     for elem in defaults:
         if elem in evalelements:
-            defaults[elem]=eval(defaults[elem])
+            defaults[elem] = eval(defaults[elem])
 
     parser.set_defaults(**defaults)
-
     return parser.parse_args()
 
 
 def match_components(args, taf_comps, metar_comps):
-    """
-    Group all the TAFComps and METARComps into TAF objects.
-    """
-
     tafs = []
     taf_comps_ = []
     for taf_comp in taf_comps:
@@ -147,7 +107,6 @@ def match_components(args, taf_comps, metar_comps):
             taf_comps_.append(taf_comp)
     taf_comps = taf_comps_
 
-    # Only use the latest issued TAF
     tafs.sort(key=lambda x: x.issue_dt, reverse=True)
     tafs_ = []
     for taf in tafs:
@@ -168,28 +127,20 @@ def match_components(args, taf_comps, metar_comps):
     tafs = tafs_
     tafs.sort(key=lambda x: x.start_dt)
 
-    # Add other TAF components
     for taf_comp in taf_comps:
         for taf in tafs:
             if taf_comp in taf:
                 taf.add_taf_comp(taf_comp)
                 break
 
-    # Add required METAR components
     metar_comps.sort(key=lambda x: x.issue_dt)
     start_index = 0
     for taf in tafs:
         for metar_comp in metar_comps[start_index:]:
             if metar_comp in taf:
                 taf.add_metar_comp(metar_comp)
-
-            # As TAFs and METARs are sorted, a too-early METAR will be
-            # too-early for all the rest of the TAFs - don't consider again
             elif metar_comp.issue_dt < taf.start_dt:
                 start_index += 1
-
-            # If we encounter a too-late METAR, break, as METARs are in
-            # issue order
             elif metar_comp.issue_dt > taf.end_dt:
                 break
 
@@ -197,15 +148,10 @@ def match_components(args, taf_comps, metar_comps):
 
 
 def main(args):
-
-    # Extract TAF and METAR components
     taf_comps, metar_comps, raw_tafs = extract.extract(args)
-
-    # Construct TAF instances
     tafs = match_components(args, taf_comps, metar_comps)
 
-    # Determine each TAF's reliability table
-    tafs_  = []
+    tafs_ = []
     failed = []
     for taf in tafs:
         try:
@@ -220,15 +166,44 @@ def main(args):
             failed.append(taf)
 
     tafs = tafs_
-
-    # Save these into PickleDBs
     save.save(tafs, args)
 
     print('{} TAFs processed, {} TAFs ignored'.format(len(tafs), len(failed)))
     print('Finished')
 
 
-if __name__ == '__main__':
+# NEW FUNCTION: call main from another script
+def main_from_params(start_dt, end_dt, sitelist, ver_period,
+                     verpy_vis_out, verpy_clb_out, config_file):
+    args = argparse.Namespace(
+        start_dt=start_dt,
+        end_dt=end_dt,
+        sitelist=sitelist,
+        ver_period=ver_period,
+        verpy_vis_out=verpy_vis_out,
+        verpy_clb_out=verpy_clb_out,
+        config_file=config_file
+    )
 
+    # replicate config handling
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    defaults = dict(config.items("defaults"))
+
+    evalelements = ('extract_lookahead', 'sql_debug', 'vis_cats', 'clb_cats',
+                    'ft_to_m', 'use_autometars', 'use_specis', 'probbins',
+                    'metars_per_hour')
+
+    for elem in defaults:
+        if elem in evalelements:
+            defaults[elem] = eval(defaults[elem])
+
+    for key, val in defaults.items():
+        setattr(args, key, val)
+
+    return main(args)
+
+
+if __name__ == '__main__':
     ARGS = get_arguments()
     main(ARGS)
