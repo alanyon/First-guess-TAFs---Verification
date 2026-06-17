@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import os
 import pandas as pd
 import subprocess
+import pickle
 
 import print_stats as ps
 
@@ -28,6 +29,12 @@ def main():
 
     # Get TAFs for 3 month period
     all_tafs = get_tafs(start_dt, end_dt)
+
+    with open(f'{DATA_DIR}/decodes/all_tafs.pkl', 'wb') as f:
+        pickle.dump(all_tafs, f)
+    # Unpickle
+    with open(f'{DATA_DIR}/decodes/all_tafs.pkl', 'rb') as f:
+        all_tafs = pickle.load(f)
 
     # Decode TAFs
     decode_tafs(all_tafs)
