@@ -29,19 +29,9 @@ from TAFDecode_env import *
 #-----------------------------------------------------------------------------
 # Driver
 #-----------------------------------------------------------------------------
-def main():
+def main(inputDir, outputDir):
   '''main() is driver of this script and is called
   automatically when the script is read interactively.'''
- 
-  # Read arguments to determine input and output directories
-  inputDir=outputDir=None
- 
-  opts,args = getopt.getopt(sys.argv[1:], "i:o:")
-  for o,v in opts:
-    if o == '-i':
-        inputDir=v
-    if o == '-o':
-        outputDir=v
  
   # Give defaults if not passed as arguments
   if inputDir is None:

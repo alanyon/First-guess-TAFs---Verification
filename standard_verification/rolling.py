@@ -5,9 +5,10 @@ import subprocess
 import pickle
 
 import print_stats as ps
+import TAFDecode_tafs as td
 
 
-OUT_DIR = '/home/users/andre.lanyon/public_html/tafs/output/'
+OUT_DIR = os.environ['OUT_DIR']
 DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 CYCLE_DATE = os.environ['CYCLE_DATE']
@@ -27,13 +28,12 @@ def main():
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
     start_dt = end_dt - timedelta(days=90)
 
-    # Get TAFs for 3 month period
-    all_tafs = get_tafs(start_dt, end_dt)
+    # # Get TAFs for 3 month period
+    # all_tafs = get_tafs(start_dt, end_dt)
 
-    with open(f'{DATA_DIR}/decodes/all_tafs.pkl', 'wb') as f:
-        pickle.dump(all_tafs, f)
-    # Unpickle
-    with open(f'{DATA_DIR}/decodes/all_tafs.pkl', 'rb') as f:
+    # with open(f'{DATA_DIR}/all_tafs.pkl', 'wb') as f:
+    #     pickle.dump(all_tafs, f)
+    with open(f'{DATA_DIR}/all_tafs.pkl', 'rb') as f:
         all_tafs = pickle.load(f)
 
     # Decode TAFs
@@ -167,24 +167,20 @@ def decode_tafs(all_tafs):
 
     for taf_type, tafs in all_tafs.items():
 
-        # Make directories if needed
+        # Make directories
         in_dir = f'{DATA_DIR}/decodes/Input_{taf_type}'
         out_dir = f'{DATA_DIR}/decodes/Output_{taf_type}'
-        if not os.path.exists(in_dir):
-            os.makedirs(in_dir)
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+        os.makedirs(in_dir)
+        os.makedirs(out_dir)
 
         # Write TAFs to input file
         with open(f'{DATA_DIR}/decodes/Input_{taf_type}/tafs.txt', 'w') as f:
             f.write('\n'.join(tafs))
 
         # Convert TAFs to correct format and save to output directory
-        cmd = ['python', 'TAFDecode_tafs.py', '-i', in_dir, '-o', out_dir]
-        dec_out = f'{DATA_DIR}/decodes/decode_{taf_type}.out'
-        dec_err = f'{DATA_DIR}/decodes/decode_{taf_type}.err'
-        with open(dec_out, 'w') as out, open(dec_err, 'w') as err:
-            subprocess.run(cmd, stdout=out, stderr=err)
+        with open(f'{DATA_DIR}/decodes/Output_{taf_type}/out.log', 'w') as out_f, \
+             open(f'{DATA_DIR}/decodes/Output_{taf_type}/err.log', 'w') as err_f:
+            td.main(in_dir, out_dir)
 
         # Create sql database
         taf_data = f"{out_dir}/acceptedTafs.csv"
