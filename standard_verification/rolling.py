@@ -20,25 +20,25 @@ AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
 
 def main():
 
-    # # Remove files from previous runs
-    # for taf_type in TAF_TYPES:
-    #     os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
-    # os.system(f'rm -rf {DATA_DIR}/decodes/*')
+    # Remove files from previous runs
+    for taf_type in TAF_TYPES:
+        os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
+    os.system(f'rm -rf {DATA_DIR}/decodes/*')
 
     # Start from Feb 2026
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
     start_dt = end_dt - timedelta(days=90)
 
-    # # Get TAFs for 3 month period
-    # all_tafs = get_tafs(start_dt, end_dt)
+    # Get TAFs for 3 month period
+    all_tafs = get_tafs(start_dt, end_dt)
 
-    # with open(f'{DATA_DIR}/all_tafs.pkl', 'wb') as f:
-    #     pickle.dump(all_tafs, f)
+    with open(f'{DATA_DIR}/all_tafs.pkl', 'wb') as f:
+        pickle.dump(all_tafs, f)
     with open(f'{DATA_DIR}/all_tafs.pkl', 'rb') as f:
         all_tafs = pickle.load(f)
 
-    # # Decode TAFs
-    # decode_tafs(all_tafs)
+    # Decode TAFs
+    decode_tafs(all_tafs)
 
     # Update config files for each TAF type
     update_configs_make_dirs(all_tafs)
