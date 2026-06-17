@@ -1,41 +1,49 @@
-from datetime import datetime, timedelta
+"""
+Module to extract recent TAFs (previous 90 days) and calculate
+verification scores for each TAF type and airport. The scores are saved
+to a CSV file for each airport.
+"""
 import os
-import pandas as pd
-import subprocess
 import pickle
+import subprocess
+from datetime import datetime, timedelta
 
+import pandas as pd
+
+import driver as dv
 import print_stats as ps
 import TAFDecode_tafs as td
-import driver as dv
 
-
+# Import environment variables
 OUT_DIR = os.environ['OUT_DIR']
 DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 CYCLE_DATE = os.environ['CYCLE_DATE']
-# Load in airport info
 INFO_FILE = os.environ['INFO_FILE']
 AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
 
 
 def main():
+    """
+    Main function to extract TAFs, decode them, and calculate
+    verification scores.
 
+    Args:
+        None
+    Returns:
+        None
+    """
     # Remove files from previous runs
     for taf_type in TAF_TYPES:
         os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
     os.system(f'rm -rf {DATA_DIR}/decodes/*')
 
-    # Start from Feb 2026
+    # Start 90 days before yesterday and end 90 days later
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
     start_dt = end_dt - timedelta(days=90)
 
-    # Get TAFs for 3 month period
+    # Get TAFs for 90 day period
     all_tafs = get_tafs(start_dt, end_dt)
-
-    with open(f'{DATA_DIR}/all_tafs.pkl', 'wb') as f:
-        pickle.dump(all_tafs, f)
-    with open(f'{DATA_DIR}/all_tafs.pkl', 'rb') as f:
-        all_tafs = pickle.load(f)
 
     # Decode TAFs
     decode_tafs(all_tafs)
@@ -46,46 +54,53 @@ def main():
     # Loop through airport info dataframe to get ICAOs
     for _, row in AIRPORT_INFO.iterrows():
 
-        # try:
+        # Ignore defence TAFs
+        if row['bench'] == 'defence':
+            continue
 
-        # Calculate scores and add to csv file
-        calc_scores(row, start_dt, end_dt)
-            
-        # except Exception as e:
-        #     print(f"Error processing ICAO {row['icao']}: {e}")
+        # Try to calculate scores (fails if no TAF data, hence except)
+        try:
+            calc_scores(row, start_dt, end_dt)
+        except Exception as e:
+            print(f"Error processing ICAO {row['icao']}: {e}")
 
 
 def calc_scores(row, start_dt, end_dt):
+    """
+    Calculate verification scores for a given airport and TAF type.
 
+    Args:
+        row (pd.Series): Row from dataframe containing airport info
+        start_dt (datetime): Start datetime for verification period
+        end_dt (datetime): End datetime for verification period
+    Returns:
+        None
+    """
+    # Define start and end strings
     start_str = start_dt.strftime('%Y%m%d')
     end_str = end_dt.strftime('%Y%m%d')
 
+    # Get ICAO and TAF length from row
     icao = row['icao']
     length = str(row['taf_len'])
 
+    # Loop through TAF types
     for taf_type in TAF_TYPES:
 
+        # Define output directories and files
         out_dir = f'{DATA_DIR}/{taf_type}'
         out_file = f'{out_dir}/{icao}.out'
         vis_file = f'{out_dir}/{icao}_90_vis.nc'
         clb_file = f'{out_dir}/{icao}_90_clb.nc'
         config_file = f'{DATA_DIR}/{taf_type}.cfg'
-        
-        # Write start timestamp
-        with open(out_file, "w") as f:
-            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
 
         # Call driver code
         with open(out_file, "a") as f:
-            dv.main_from_params(start_dt=start_dt, end_dt=end_dt, 
-                                sitelist=[icao], 
-                                ver_period=timedelta(hours=int(length)), 
-                                verpy_vis_out=vis_file, verpy_clb_out=clb_file, 
+            dv.main_from_params(start_dt=start_dt, end_dt=end_dt,
+                                sitelist=[icao],
+                                ver_period=timedelta(hours=int(length)),
+                                verpy_vis_out=vis_file, verpy_clb_out=clb_file,
                                 config_file=config_file)
-
-        # Write end timestamp
-        with open(out_file, "a") as f:
-            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
 
     # Calculate scores
     gerrity_vis, peirce_vis = ps.main('vis', icao, start_str, end_str)
@@ -114,8 +129,16 @@ def calc_scores(row, start_dt, end_dt):
 
 
 def convert_manual_tafs(txt_file, taf_dir):
+    """
+    Convert manual TAFs to verification format.
 
-    # Read lines from manual TAF file 
+    Args:
+        txt_file (str): Name of the text file containing manual TAFs
+        taf_dir (str): Directory containing the text file
+    Returns:
+        ver_tafs (list): List of TAFs in verification format
+    """
+    # Read lines from manual TAF file
     with open(os.path.join(taf_dir, txt_file), 'r') as f:
         lines = f.read().splitlines()
 
@@ -165,7 +188,15 @@ def convert_manual_tafs(txt_file, taf_dir):
 
 
 def decode_tafs(all_tafs):
+    """
+    Decode TAFs for each TAF type and create SQLite databases.
 
+    Args:
+        all_tafs (dict): Dictionary containing TAFs for each TAF type
+    Returns:
+        None
+    """
+    # Loop through TAF types
     for taf_type, tafs in all_tafs.items():
 
         # Make directories
@@ -198,10 +229,20 @@ def decode_tafs(all_tafs):
 
 
 def get_tafs(taf_date, end_date):
+    """
+    Extract TAFs for the given date range and return them in a
+    dictionary.
 
+    Args:
+        taf_date (datetime): Start date for TAF extraction
+        end_date (datetime): End date for TAF extraction
+    Returns:
+        all_tafs (dict): Dictionary containing TAFs for each TAF type
+    """
     # Create dictionary to hold TAFs
     all_tafs = {taf_type: [] for taf_type in TAF_TYPES}
 
+    # Loop through dates from start to end
     while taf_date <= end_date:
 
         # Find tafs for day
@@ -209,27 +250,27 @@ def get_tafs(taf_date, end_date):
 
         # Loop through all files in directory
         for txt_file in os.listdir(taf_dir):
-        
+
             # Ignore non-txt files
             if not txt_file.endswith('.txt'):
                 continue
 
             # Go through verification TAF files
             if 'verification' in txt_file:
-                
+
                 # Read TAFs from file
                 with open(os.path.join(taf_dir, txt_file), 'r') as f:
                     tafs = f.read().splitlines()
 
                 # Loop through TAFs
                 for taf in tafs:
-                    
+
                     # Get ICAO from TAF and ignore if defence
                     icao = taf.split()[7]
                     info = AIRPORT_INFO[AIRPORT_INFO['icao'] == icao]
                     if info['bench'].values[0] == 'defence':
                         continue
-                    
+
                     # Add TAF to month collection
                     taf_type = txt_file[17: -4]
                     all_tafs[taf_type].append(taf)
@@ -250,6 +291,11 @@ def get_tafs(taf_date, end_date):
 def update_configs_make_dirs(all_tafs):
     """
     Update config files with new data directory.
+
+    Args:
+        all_tafs (dict): Dictionary containing TAFs for each TAF type
+    Returns:
+        None
     """
     # Make stats directory if necessary
     stats_dir = f'{DATA_DIR}/stats'
@@ -283,7 +329,7 @@ def update_configs_make_dirs(all_tafs):
                  'use_specis = False\n',
                  'probbins = Problist([0.0, 0.3, 0.4, 0.6, 0.7, 1.0])\n',
                  'vis_verpy_str = vis\n',
-                 'clb_verpy_str = cbh|5.0\n', 
+                 'clb_verpy_str = cbh|5.0\n',
                  'metars_per_hour = 2\n']
 
         # Write lines to config file
@@ -293,3 +339,4 @@ def update_configs_make_dirs(all_tafs):
 
 if __name__ == "__main__":
     main()
+    
