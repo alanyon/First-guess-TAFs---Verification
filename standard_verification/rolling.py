@@ -184,11 +184,11 @@ def decode_tafs(all_tafs):
         taf_decoded_data = f"{out_dir}/decodedTafs.csv"
         db_file = f"{DATA_DIR}/decodes/{taf_type}.db"
         sqlite_commands = "\n".join([
-            ".read create_tables.sql",
+            f".read {DATA_DIR}/create_tables.sql",
             '.separator ","',
             f'.import "{taf_data}" taf_load',
             f'.import "{taf_decoded_data}" taf_decoded_load',
-            ".read copy_data.sql"
+            f".read {DATA_DIR}/copy_data.sql"
         ])
         subprocess.run(["sqlite3", db_file], input=sqlite_commands, text=True)
 
