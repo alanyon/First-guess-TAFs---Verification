@@ -117,7 +117,6 @@ def main():
                 plot_file = os.path.join(PLOT_DIR, f'{icao}_{param}_{score_name}.png')
                 plt.savefig(plot_file)
                 plt.close(fig)
-            # exit()
 
 
 def name_cols(columns):

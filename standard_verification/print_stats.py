@@ -1,6 +1,5 @@
 '''Module for printing stats extracted from TAF NetCDF files'''
 import os
-import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -16,55 +15,16 @@ TAF_TYPES = os.environ['TAF_TYPES'].split()
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 CYCLE_DATE = os.environ['CYCLE_DATE']
-INFO_FILE = os.environ['INFO_FILE']
 
-PARAMS = {'vis': 'Visibility', 'clb': 'Cloud Base'}
 TAF_CATS = {'vis': {0: '<=300m', 1: '300-750m', 2: '800-1400m',
                     3: '1500-4900m', 4: '5000-9000m', 5: '>=10000m'},
             'clb': {0: '<=100ft', 1: '200-400ft', 2: '500-900ft',
                     3: '1000-1400ft', 4: '>=1500ft'}}
 
 
-def print_ct(con_table):
-    '''Pretty print contingency table'''
-    cats = con_table.shape[0]
-
-    line = '='*10 + ' ' + '='*((cats+1)*13)
-
-    # Determine total FCs and forecast and observed frequencies
-    total_fcs = con_table.sum(axis=1)
-    total_obs = con_table.sum(axis=0)
-    total_all = con_table.sum()
-    fcs_freqs = total_fcs / total_all
-    obs_freqs = total_obs / total_all
-    # Header
-    # print(line)
-    # print(' ' * 11 + ''.join([f'OB cat {i+1}     ' for i in range(cats)]) +
-    #       'Total')
-    # print(line)
-
-    # # Rows
-    # for i in range(cats):
-    #     print(f'FC cat {i + 1}   ' +
-    #           ''.join([f'{val:<13}' for val in np.round(con_table[i], 2)]) +
-    #           f'{np.round(total_fcs[i]):<13}')
-
-    # # Totals
-    # print(line)
-    # print('Total      ' +
-    #       ''.join([f'{val:<13}' for val in np.round(total_obs, 2)]) +
-    #       f'{np.round(total_all):<13}')
-    # print(line)
-
-    return fcs_freqs, obs_freqs
-
 def main(param, station, start, end):
     '''Extract data, equalize and mean before printing'''
-    # Load in airport info, mapping icaos to airport names
-    airport_info = pd.read_csv(INFO_FILE, header=0)
-    icao_dict = pd.Series(airport_info.airport_name.values,
-                          index=airport_info.icao).to_dict()
-    
+  
     # Concatenate monthly files together
     source_list = []
     for taf_type in TAF_TYPES:
@@ -117,7 +77,7 @@ def main(param, station, start, end):
 
         # Plot confusion matrix as heatmap
         ct_vals = np.squeeze(case.data.vals)
-        plot_ct_heatmap(ct_vals, param, station, taf_type, icao_dict[station])
+        plot_ct_heatmap(ct_vals, param, station, taf_type)
 
         # Calculate Gerrity, Peirce and Accuracy
         req_stats = [ver.stats.get_statistic(stat) for stat in [7987, 7988]]
@@ -138,7 +98,7 @@ def main(param, station, start, end):
     return gerrity_scores, peirce_scores
 
 
-def plot_ct_heatmap(ct_vals, param, station, taf_type, airport_name):
+def plot_ct_heatmap(ct_vals, param, station, taf_type):
     """
     Plot a contingency table as a heatmap with annotations.
 
