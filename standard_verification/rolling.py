@@ -4,7 +4,6 @@ verification scores for each TAF type and airport. The scores are saved
 to a CSV file for each airport.
 """
 import os
-import pickle
 import subprocess
 from datetime import datetime, timedelta
 
@@ -89,7 +88,6 @@ def calc_scores(row, start_dt, end_dt):
 
         # Define output directories and files
         out_dir = f'{DATA_DIR}/{taf_type}'
-        out_file = f'{out_dir}/{icao}.out'
         vis_file = f'{out_dir}/{icao}_90_vis.nc'
         clb_file = f'{out_dir}/{icao}_90_clb.nc'
         config_file = f'{DATA_DIR}/{taf_type}.cfg'
@@ -101,8 +99,8 @@ def calc_scores(row, start_dt, end_dt):
                             config_file=config_file)
 
     # Calculate scores
-    gerrity_vis, peirce_vis = ps.main('vis', icao, start_str, end_str)
-    gerrity_clb, peirce_clb = ps.main('clb', icao, start_str, end_str)
+    gerrity_vis, peirce_vis, cts_vis = ps.main('vis', icao, start_str, end_str)
+    gerrity_clb, peirce_clb, cts_clb = ps.main('clb', icao, start_str, end_str)
 
     # Create dataframe to hold scores
     scores = {'Date': [end_str]}
@@ -124,6 +122,13 @@ def calc_scores(row, start_dt, end_dt):
         old_scores_df = pd.read_csv(scores_file)
         scores_df = pd.concat([old_scores_df, scores_df], ignore_index=True)
     scores_df.to_csv(scores_file, index=False)
+
+    # Save contingency table values for plotting
+    for taf_type in TAF_TYPES:
+        ct_vis = cts_vis[taf_type]
+        ct_clb = cts_clb[taf_type]
+        ct_vis.to_csv(f'{DATA_DIR}/cts/{icao}_ct_vis_{taf_type}.csv')
+        ct_clb.to_csv(f'{DATA_DIR}/cts/{icao}_ct_clb_{taf_type}.csv')
 
 
 def convert_manual_tafs(txt_file, taf_dir):

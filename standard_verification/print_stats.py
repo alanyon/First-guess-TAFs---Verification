@@ -1,14 +1,12 @@
 '''Module for printing stats extracted from TAF NetCDF files'''
 import os
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 import numpy as np
 import VerPy as ver
 import xarray
+import pandas as pd
 
 # Environment constants
-STATS_DIR = os.environ['STATS_DIR']
 DATA_DIR = os.environ['DATA_DIR']
 PLOT_DIR = os.environ['PLOT_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
@@ -69,15 +67,22 @@ def main(param, station, start, end):
 
     gerrity_scores = {}
     peirce_scores = {}
+    cts = {}
 
     for case, taf_type in zip(cases, TAF_TYPES):
 
         # Mean over all dates
         case.data.mean_all_dates()
 
-        # Plot confusion matrix as heatmap
+        # Save contingency table values for plotting
         ct_vals = np.squeeze(case.data.vals)
-        plot_ct_heatmap(ct_vals, param, station, taf_type)
+
+        # Convert to DataFrame
+        cats = ct_vals.shape[0]
+        df_ct = pd.DataFrame(ct_vals, 
+                             index=[f'FC_cat_{i+1}' for i in range(cats)],
+                             columns=[f'OB_cat_{i+1}' for i in range(cats)])
+        cts[taf_type] = df_ct
 
         # Calculate Gerrity, Peirce and Accuracy
         req_stats = [ver.stats.get_statistic(stat) for stat in [7987, 7988]]
@@ -95,39 +100,7 @@ def main(param, station, start, end):
         gerrity_scores[taf_type] = gerrity
         peirce_scores[taf_type] = peirce_vals
 
-    return gerrity_scores, peirce_scores
-
-
-def plot_ct_heatmap(ct_vals, param, station, taf_type):
-    """
-    Plot a contingency table as a heatmap with annotations.
-
-    Parameters
-    ----------
-    ct_vals : np.ndarray
-        2D contingency table (forecast categories x observed categories)
-    """
-    # Create labels
-    cats = ct_vals.shape[0]
-    fc_labels = [TAF_CATS[param][i] for i in range(cats)]
-    ob_labels = [TAF_CATS[param][i] for i in range(cats)]
-
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(9, 7))
-
-    # Plot heatmap
-    sns.heatmap(ct_vals, annot=True, fmt='g', cmap='Blues', cbar=False, ax=ax,
-                xticklabels=ob_labels, yticklabels=fc_labels)
-
-    # Labels and title
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
-    ax.set_xlabel('Observed Category', fontsize=18, weight='bold')
-    ax.set_ylabel('Forecast Category', fontsize=18, weight='bold')
-
-    # Save figure
-    plt.tight_layout()
-    fig.savefig(f'{PLOT_DIR}/{param}_{station}_{taf_type}_ct_heatmap.png')
-    plt.close()
+    return gerrity_scores, peirce_scores, cts
 
 
 def convert_to_1vsAll_2x2(dat):

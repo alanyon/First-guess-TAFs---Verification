@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 
-
-STATS_DIR = os.environ['STATS_DIR']
+DATA_DIR = os.environ['DATA_DIR']
 PLOT_DIR = os.environ['PLOT_DIR']
 INFO_FILE = os.environ['INFO_FILE']
 SCORES = {'gerrity': 'Gerrity Skill Scores', 'peirce_0': 'Peirce Skill Scores', 
@@ -32,22 +31,64 @@ def main():
     icao_dict = pd.Series(airport_info.airport_name.values,
                           index=airport_info.icao).to_dict()
 
+    score_line_plots(icao_dict)
+
+    confusion_plots()
+
+
+def confusion_plots():
+    
+    # Loop through csv files in DATA_DIR/cts
+    for file in os.listdir(f'{DATA_DIR}/cts'):
+
+        # Load contingency table values into pandas dataframe
+        ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file), index_col=0)
+
+        # Get ICAO, parameter and TAF type from filename
+        icao, param = file.split('_')[0], file.split('_')[2]
+        taf_type = file[12: -4]
+
+        # Create labels
+        cats = ct_df.shape[0]
+        fc_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
+        ob_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
+
+        # Create figure and axis
+        fig, ax = plt.subplots(figsize=(12, 9))
+
+        # Plot heatmap
+        sns.heatmap(ct_df, annot=True, fmt='g', cmap='Blues', cbar=False, 
+                    ax=ax, xticklabels=ob_labels, yticklabels=fc_labels)
+
+        # Labels and title
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+        ax.set_xlabel('Observed Category', fontsize=25, weight='bold')
+        ax.set_ylabel('Forecast Category', fontsize=25, weight='bold')
+
+        # Save figure
+        plt.tight_layout()
+        fig.savefig(f'{PLOT_DIR}/{param}_{icao}_{taf_type}_ct_heatmap.png')
+        plt.close()
+
+
+def score_line_plots(icao_dict):
+
     # Build colour palette
     blues6 = sample_shades('Blues', 6, low=0.30, high=0.95)
     reds6  = sample_shades('Reds',  6, low=0.30, high=0.95)
     green1 = ['#2ca02c']
     palette_13 = blues6 + reds6 + green1
 
-    # Loop through csv files in STATS_DIR
-    for file in os.listdir(STATS_DIR):
+    # Loop through csv files in DATA_DIR/stats
+    for file in os.listdir(f'{DATA_DIR}/stats'):
 
         # Get ICAO from filename
         icao = file.split('_')[0]
 
         # Load file into pandas dataframe
-        vdf = pd.read_csv(os.path.join(STATS_DIR, file))
+        vdf = pd.read_csv(os.path.join(f'{DATA_DIR}/stats', file))
 
-
+        # Loop through parameters
         for param in PARAMS:
 
             # Filter dataframe for parameter
