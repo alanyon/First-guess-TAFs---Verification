@@ -1,10 +1,8 @@
 '''Module for printing stats extracted from TAF NetCDF files'''
-import csv
-import glob
 import os
-import sys
 import pandas as pd
-from datetime import datetime, timedelta
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 import numpy as np
 import VerPy as ver
@@ -13,10 +11,18 @@ import xarray
 # Environment constants
 STATS_DIR = os.environ['STATS_DIR']
 DATA_DIR = os.environ['DATA_DIR']
+PLOT_DIR = os.environ['PLOT_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 CYCLE_DATE = os.environ['CYCLE_DATE']
+INFO_FILE = os.environ['INFO_FILE']
+
+PARAMS = {'vis': 'Visibility', 'clb': 'Cloud Base'}
+TAF_CATS = {'vis': {0: '<=300m', 1: '300-750m', 2: '800-1400m',
+                    3: '1500-4900m', 4: '5000-9000m', 5: '>=10000m'},
+            'clb': {0: '<=100ft', 1: '200-400ft', 2: '500-900ft',
+                    3: '1000-1400ft', 4: '>=1500ft'}}
 
 
 def print_ct(con_table):
@@ -54,9 +60,11 @@ def print_ct(con_table):
 
 def main(param, station, start, end):
     '''Extract data, equalize and mean before printing'''
-    # print('param is ', param)
-    # print('station is ', station)
-
+    # Load in airport info, mapping icaos to airport names
+    airport_info = pd.read_csv(INFO_FILE, header=0)
+    icao_dict = pd.Series(airport_info.airport_name.values,
+                          index=airport_info.icao).to_dict()
+    
     # Concatenate monthly files together
     source_list = []
     for taf_type in TAF_TYPES:
@@ -104,18 +112,12 @@ def main(param, station, start, end):
 
     for case, taf_type in zip(cases, TAF_TYPES):
 
-        # print('')
-        # print('TAF type: ', taf_type)
-        # print('Station is ', station)
-        # print('Param is ', param)
-        # print('')
-
         # Mean over all dates
         case.data.mean_all_dates()
 
-        # Print table
+        # Plot confusion matrix as heatmap
         ct_vals = np.squeeze(case.data.vals)
-        fcs_freqs, obs_freqs = print_ct(ct_vals)
+        plot_ct_heatmap(ct_vals, param, station, taf_type, icao_dict[station])
 
         # Calculate Gerrity, Peirce and Accuracy
         req_stats = [ver.stats.get_statistic(stat) for stat in [7987, 7988]]
@@ -124,22 +126,48 @@ def main(param, station, start, end):
 
         big_peirce, gerrity = list(cat_stats.vals.flatten())
 
-        # print('')
-        # print('Gerrity score is ', np.round(gerrity, 2))
-        # print('Big peirce score is ', np.round(big_peirce, 2))
-
         # Get Peirce skill scores for each category
         case.data = convert_to_1vsAll_2x2(case.data)
         req_stats = [ver.stats.get_statistic(7908)]
         peirce = ver.stats.derived.calc_stats(case.data, req_stats)
         peirce_vals = list(peirce.vals.flatten())
-        # print('Small peirce scores are ', np.round(peirce_vals, 2))
-        # print('Mean small peirce score is', np.round(np.mean(peirce_vals), 2))
 
         gerrity_scores[taf_type] = gerrity
         peirce_scores[taf_type] = peirce_vals
 
     return gerrity_scores, peirce_scores
+
+
+def plot_ct_heatmap(ct_vals, param, station, taf_type, airport_name):
+    """
+    Plot a contingency table as a heatmap with annotations.
+
+    Parameters
+    ----------
+    ct_vals : np.ndarray
+        2D contingency table (forecast categories x observed categories)
+    """
+    # Create labels
+    cats = ct_vals.shape[0]
+    fc_labels = [TAF_CATS[param][i] for i in range(cats)]
+    ob_labels = [TAF_CATS[param][i] for i in range(cats)]
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    # Plot heatmap
+    sns.heatmap(ct_vals, annot=True, fmt='g', cmap='Blues', cbar=False, ax=ax,
+                xticklabels=ob_labels, yticklabels=fc_labels)
+
+    # Labels and title
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+    ax.set_xlabel('Observed Category', fontsize=18, weight='bold')
+    ax.set_ylabel('Forecast Category', fontsize=18, weight='bold')
+
+    # Save figure
+    plt.tight_layout()
+    fig.savefig(f'{PLOT_DIR}/{param}_{station}_{taf_type}_ct_heatmap.png')
+    plt.close()
 
 
 def convert_to_1vsAll_2x2(dat):
