@@ -31,43 +31,68 @@ def main():
     icao_dict = pd.Series(airport_info.airport_name.values,
                           index=airport_info.icao).to_dict()
 
-    score_line_plots(icao_dict)
+    # score_line_plots(icao_dict)
 
     confusion_plots()
 
 
 def confusion_plots():
     
-    # Loop through csv files in DATA_DIR/cts
-    for file in os.listdir(f'{DATA_DIR}/cts'):
+    # Get list of csv files in DATA_DIR/cts
+    files = sorted(os.listdir(f'{DATA_DIR}/cts'))
+    
+    # Group files by ICAO
+    icao_files = {}
+    for file in files:
+        icao = file.split('_')[0]
+        if icao not in icao_files:
+            icao_files[icao] = []
+        icao_files[icao].append(file)
+    
+    # Loop through each ICAO and create separate figure
+    for icao, icao_file_list in icao_files.items():
+        num_files = len(icao_file_list)
+        
+        # Create figure with subplots stacked vertically
+        fig, axes = plt.subplots(num_files, 1, figsize=(12, 5 * num_files))
+        
+        # Handle case where there's only one file
+        if num_files == 1:
+            axes = [axes]
+        
+        # Loop through csv files for this ICAO
+        for idx, file in enumerate(icao_file_list):
 
-        # Load contingency table values into pandas dataframe
-        ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file), index_col=0)
+            # Load contingency table values into pandas dataframe
+            ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file), 
+                                index_col=0)
 
-        # Get ICAO, parameter and TAF type from filename
-        icao, param = file.split('_')[0], file.split('_')[2]
-        taf_type = file[12: -4]
+            # Get parameter and TAF type from filename
+            param = file.split('_')[2]
+            taf_type = file[12: -4]
 
-        # Create labels
-        cats = ct_df.shape[0]
-        fc_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
-        ob_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
+            # Create labels
+            cats = ct_df.shape[0]
+            fc_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
+            ob_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
 
-        # Create figure and axis
-        fig, ax = plt.subplots(figsize=(12, 9))
+            # Plot heatmap
+            sns.heatmap(ct_df, annot=True, fmt='g', cmap='Blues', cbar=False, 
+                        ax=axes[idx], xticklabels=ob_labels, 
+                        yticklabels=fc_labels)
 
-        # Plot heatmap
-        sns.heatmap(ct_df, annot=True, fmt='g', cmap='Blues', cbar=False, 
-                    ax=ax, xticklabels=ob_labels, yticklabels=fc_labels)
-
-        # Labels and title
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
-        ax.set_xlabel('Observed Category', fontsize=25, weight='bold')
-        ax.set_ylabel('Forecast Category', fontsize=25, weight='bold')
+            # Labels and title
+            axes[idx].set_xticklabels(axes[idx].get_xticklabels(), rotation=0)
+            axes[idx].set_xlabel('Observed Category', fontsize=25, 
+                                 weight='bold')
+            axes[idx].set_ylabel('Forecast Category', fontsize=25, 
+                                 weight='bold')
+            taf_type_long = get_taf_type_long(taf_type)
+            axes[idx].set_title(taf_type_long, fontsize=30,  weight='bold')
 
         # Save figure
-        plt.tight_layout()
-        fig.savefig(f'{PLOT_DIR}/{param}_{icao}_{taf_type}_ct_heatmap.png')
+        plt.tight_layout(pad=2.0)
+        fig.savefig(f'{PLOT_DIR}/{icao}_{param}_confusion.png')
         plt.close()
 
 
@@ -169,53 +194,94 @@ def name_cols(columns):
         # Keep date column as is
         if col == 'Date':
             new_cols.append(col)
-        
+
         # Rename other columns
         else:
-            if 'opt_no_obs' in col:
-                if 'ml' in col:
-                    new_cols.append('Optimistic Auto TAFs\n(no obs, no ML)')
-                else:
-                    new_cols.append('Optimistic Auto TAFs\n(no obs, with ML)')
-            elif 'opt_obs_update_1' in col:
-                if 'ml' in col:
-                    new_cols.append('Optimistic Auto TAFs\n(obs update 1,'
-                                    ' no ML)')
-                else:
-                    new_cols.append('Optimistic Auto TAFs\n(obs update 1,'
-                                    ' with ML)')
-            elif 'opt_obs_update_2' in col:
-                if 'ml' in col:
-                    new_cols.append('Optimistic Auto TAFs\n(obs update 2,'
-                                    ' no ML)')
-                else:
-                    new_cols.append('Optimistic Auto TAFs\n(obs update 2,'
-                                    ' with ML)')
-            elif 'pes_no_obs' in col:
-                if 'ml' in col:
-                    new_cols.append('Pessimistic Auto TAFs\n(no obs, no ML)')
-                else:
-                    new_cols.append('Pessimistic Auto TAFs\n(no obs, with ML)')
-            elif 'pes_obs_update_1' in col:
-                if 'ml' in col:
-                    new_cols.append('Pessimistic Auto TAFs\n(obs update 1,'
-                                    ' no ML)')
-                else:
-                    new_cols.append('Pessimistic Auto TAFs\n(obs update 1,'
-                                    ' with ML)')
-            elif 'pes_obs_update_2' in col:
-                if 'ml' in col:
-                    new_cols.append('Pessimistic Auto TAFs\n(obs update 2,'
-                                    ' no ML)')
-                else:
-                    new_cols.append('Pessimistic Auto TAFs\n(obs update 2,'
-                                    ' with ML)')
-            elif 'manual' in col:
-                new_cols.append('Manual TAFs')
-            else:
-                print(f'Column {col} not recognised')
+            taf_type_long = get_taf_type_long(col)
+            new_cols.append(taf_type_long)
+            # if 'opt_no_obs' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Optimistic Auto TAFs\n(no obs, no ML)')
+            #     else:
+            #         new_cols.append('Optimistic Auto TAFs\n(no obs, with ML)')
+            # elif 'opt_obs_update_1' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Optimistic Auto TAFs\n(obs update 1,'
+            #                         ' no ML)')
+            #     else:
+            #         new_cols.append('Optimistic Auto TAFs\n(obs update 1,'
+            #                         ' with ML)')
+            # elif 'opt_obs_update_2' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Optimistic Auto TAFs\n(obs update 2,'
+            #                         ' no ML)')
+            #     else:
+            #         new_cols.append('Optimistic Auto TAFs\n(obs update 2,'
+            #                         ' with ML)')
+            # elif 'pes_no_obs' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Pessimistic Auto TAFs\n(no obs, no ML)')
+            #     else:
+            #         new_cols.append('Pessimistic Auto TAFs\n(no obs, with ML)')
+            # elif 'pes_obs_update_1' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Pessimistic Auto TAFs\n(obs update 1,'
+            #                         ' no ML)')
+            #     else:
+            #         new_cols.append('Pessimistic Auto TAFs\n(obs update 1,'
+            #                         ' with ML)')
+            # elif 'pes_obs_update_2' in col:
+            #     if 'ml' in col:
+            #         new_cols.append('Pessimistic Auto TAFs\n(obs update 2,'
+            #                         ' no ML)')
+            #     else:
+            #         new_cols.append('Pessimistic Auto TAFs\n(obs update 2,'
+            #                         ' with ML)')
+            # elif 'manual' in col:
+            #     new_cols.append('Manual TAFs')
+            # else:
+            #     print(f'Column {col} not recognised')
 
     return new_cols
+
+
+def get_taf_type_long(short_name):
+
+        if 'opt_no_obs' in short_name:
+            if 'ml' in short_name:
+                return 'Optimistic Auto TAFs\n(no obs, no ML)'
+            else:
+                return 'Optimistic Auto TAFs\n(no obs, with ML)'
+        elif 'opt_obs_update_1' in short_name:
+            if 'ml' in short_name:
+                return 'Optimistic Auto TAFs\n(obs update 1, no ML)'
+            else:
+                return 'Optimistic Auto TAFs\n(obs update 1, with ML)'
+        elif 'opt_obs_update_2' in short_name:
+            if 'ml' in short_name:
+                return 'Optimistic Auto TAFs\n(obs update 2, no ML)'
+            else:
+                return 'Optimistic Auto TAFs\n(obs update 2, with ML)'
+        elif 'pes_no_obs' in short_name:
+            if 'ml' in short_name:
+                return 'Pessimistic Auto TAFs\n(no obs, no ML)'
+            else:
+                return 'Pessimistic Auto TAFs\n(no obs, with ML)'
+        elif 'pes_obs_update_1' in short_name:
+            if 'ml' in short_name:
+                return 'Pessimistic Auto TAFs\n(obs update 1, no ML)'
+            else:
+                return 'Pessimistic Auto TAFs\n(obs update 1, with ML)'
+        elif 'pes_obs_update_2' in short_name:
+            if 'ml' in short_name:
+                return 'Pessimistic Auto TAFs\n(obs update 2, no ML)'
+            else:
+                return 'Pessimistic Auto TAFs\n(obs update 2, with ML)'
+        elif 'manual' in short_name:
+            return 'Manual TAFs'
+        else:
+            print(f'Column {short_name} not recognised')
+            return None
 
 
 def sample_shades(cmap_name, n, low=0.30, high=0.95):
