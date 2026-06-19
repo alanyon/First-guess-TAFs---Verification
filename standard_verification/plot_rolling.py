@@ -31,7 +31,7 @@ def main():
     icao_dict = pd.Series(airport_info.airport_name.values,
                           index=airport_info.icao).to_dict()
 
-    # score_line_plots(icao_dict)
+    score_line_plots(icao_dict)
 
     confusion_plots()
 
