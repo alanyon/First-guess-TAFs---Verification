@@ -2,6 +2,17 @@
 Module to extract recent TAFs (previous 90 days) and calculate
 verification scores for each TAF type and airport. The scores are saved
 to a CSV file for each airport.
+
+Functions:
+    main(): Main function to extract TAFs and calculate scores.
+    analyse_tafs(): Analyse TAFs for a given airport and TAF type.
+    calc_scores(): Calculate scores for a given airport and TAF type.
+    convert_manual_tafs(): Convert manual TAFs to verification format.
+    decode_tafs(): Decode TAFs for each type, create SQLite databases.
+    get_tafs(): Extract TAFs for the given date range.
+    update_configs_make_dirs(): Update config files, make directories.
+
+Written by Andre Lanyon, 2026.
 """
 import os
 import subprocess
@@ -60,8 +71,35 @@ def main():
         # Try to calculate scores (fails if no TAF data, hence except)
         try:
             calc_scores(row, start_dt, end_dt)
-        except Exception as e:
+        except (FileNotFoundError, KeyError, ValueError) as e:
             print(f"Error processing ICAO {row['icao']}: {e}")
+
+
+def analyse_tafs(icao, start_dt, end_dt, length):
+    """
+    Analyse TAFs for a given airport and TAF type, and save to output
+    files.
+
+    Args:
+        icao (str): ICAO code for the airport
+        start_dt (datetime): Start datetime for verification period
+        end_dt (datetime): End datetime for verification period
+        length (str): Length of TAF (9, 24 or 30 hours)
+    """
+    # Loop through TAF types
+    for taf_type in TAF_TYPES:
+
+        # Define output directories and files
+        out_dir = f'{DATA_DIR}/{taf_type}'
+        vis_file = f'{out_dir}/{icao}_90_vis.nc'
+        clb_file = f'{out_dir}/{icao}_90_clb.nc'
+        config_file = f'{DATA_DIR}/{taf_type}.cfg'
+
+        # Call driver code
+        dv.main_from_params(start_dt=start_dt, end_dt=end_dt, sitelist=[icao],
+                            ver_period=timedelta(hours=int(length)),
+                            verpy_vis_out=vis_file, verpy_clb_out=clb_file,
+                            config_file=config_file)
 
 
 def calc_scores(row, start_dt, end_dt):
@@ -83,38 +121,11 @@ def calc_scores(row, start_dt, end_dt):
     icao = row['icao']
     length = str(row['taf_len'])
 
-    # Loop through TAF types
-    for taf_type in TAF_TYPES:
+    # Analyse TAFs for each TAF type and save to output files
+    analyse_tafs(icao, start_dt, end_dt, length)
 
-        # Define output directories and files
-        out_dir = f'{DATA_DIR}/{taf_type}'
-        vis_file = f'{out_dir}/{icao}_90_vis.nc'
-        clb_file = f'{out_dir}/{icao}_90_clb.nc'
-        config_file = f'{DATA_DIR}/{taf_type}.cfg'
-
-        # Call driver code
-        dv.main_from_params(start_dt=start_dt, end_dt=end_dt, sitelist=[icao],
-                            ver_period=timedelta(hours=int(length)),
-                            verpy_vis_out=vis_file, verpy_clb_out=clb_file,
-                            config_file=config_file)
-
-    # Calculate scores
-    gerrity_vis, peirce_vis, cts_vis = ps.main('vis', icao, start_str, end_str)
-    gerrity_clb, peirce_clb, cts_clb = ps.main('clb', icao, start_str, end_str)
-
-    # Create dataframe to hold scores
-    scores = {'Date': [end_str]}
-    for s_name_score, score in gerrity_vis.items():
-        scores[f'gerrity_vis_{s_name_score}'] = [score]
-    for s_name_score, score in gerrity_clb.items():
-        scores[f'gerrity_clb_{s_name_score}'] = [score]
-    for s_name_score, p_scores in peirce_vis.items():
-        for ind, score in enumerate(p_scores):
-            scores[f'peirce_vis_{s_name_score}_{ind}'] = [score]
-    for s_name_score, p_scores in peirce_clb.items():
-        for ind, score in enumerate(p_scores):
-            scores[f'peirce_clb_{s_name_score}_{ind}'] = [score]
-    scores_df = pd.DataFrame(scores)
+    # Match TAFs of various types and calculate verification scores
+    scores_df, cts_vis, cts_clb = match_verify(icao, start_str, end_str)
 
     # Add to csv file or create new one if it doesn't exist
     scores_file = f'{DATA_DIR}/stats/{icao}_scores.csv'
@@ -142,7 +153,7 @@ def convert_manual_tafs(txt_file, taf_dir):
         ver_tafs (list): List of TAFs in verification format
     """
     # Read lines from manual TAF file
-    with open(os.path.join(taf_dir, txt_file), 'r') as f:
+    with open(os.path.join(taf_dir, txt_file), 'r', encoding='utf-8') as f:
         lines = f.read().splitlines()
 
     # Get TAFs as single lines - each starts with TAF and ends with =
@@ -159,9 +170,7 @@ def convert_manual_tafs(txt_file, taf_dir):
             taf += ' ' + line.strip()
 
     # Get TAF start time from directory and filename
-    taf_date_str = taf_dir[-8:]
-    taf_time_str = txt_file[0:2]
-    taf_start = datetime.strptime(taf_date_str + taf_time_str, '%Y%m%d%H')
+    taf_start = datetime.strptime(taf_dir[-8:] + txt_file[0:2], '%Y%m%d%H')
 
     # Get issue date by subtracting 1 hour from TAF start time
     issue_dt = taf_start - timedelta(hours=1)
@@ -209,15 +218,18 @@ def decode_tafs(all_tafs):
         os.makedirs(out_dir)
 
         # Write TAFs to input file
-        with open(f'{DATA_DIR}/decodes/Input_{taf_type}/tafs.txt', 'w') as f:
+        with open(f'{DATA_DIR}/decodes/Input_{taf_type}/tafs.txt', 'w',
+                  encoding='utf-8') as f:
             f.write('\n'.join(tafs))
 
         # Convert TAFs to correct format and save to output directory
-        with open(f'{DATA_DIR}/decodes/Output_{taf_type}/out.log', 'w') as out_f, \
-             open(f'{DATA_DIR}/decodes/Output_{taf_type}/err.log', 'w') as err_f:
+        with open(f'{DATA_DIR}/decodes/Output_{taf_type}/out.log', 'w',
+                  encoding='utf-8') as _, \
+             open(f'{DATA_DIR}/decodes/Output_{taf_type}/err.log', 'w',
+                  encoding='utf-8') as _:
             td.main(in_dir, out_dir)
 
-        # Create sql database
+        # Create sql dSatabase
         taf_data = f"{out_dir}/acceptedTafs.csv"
         taf_decoded_data = f"{out_dir}/decodedTafs.csv"
         db_file = f"{DATA_DIR}/decodes/{taf_type}.db"
@@ -228,7 +240,8 @@ def decode_tafs(all_tafs):
             f'.import "{taf_decoded_data}" taf_decoded_load',
             f".read {DATA_DIR}/copy_data.sql"
         ])
-        subprocess.run(["sqlite3", db_file], input=sqlite_commands, text=True)
+        subprocess.run(["sqlite3", db_file], input=sqlite_commands, text=True,
+                       check=False)
 
 
 def get_tafs(taf_date, end_date):
@@ -262,7 +275,8 @@ def get_tafs(taf_date, end_date):
             if 'verification' in txt_file:
 
                 # Read TAFs from file
-                with open(os.path.join(taf_dir, txt_file), 'r') as f:
+                with open(os.path.join(taf_dir, txt_file), 'r',
+                          encoding='utf-8') as f:
                     tafs = f.read().splitlines()
 
                 # Loop through TAFs
@@ -289,6 +303,40 @@ def get_tafs(taf_date, end_date):
         taf_date += timedelta(days=1)
 
     return all_tafs
+
+
+def match_verify(icao, start_str, end_str):
+    """
+    Matches TAFs of various types and calculates verification scores,
+    saving the results to CSV files.
+
+    Args:
+        icao (str): ICAO code for the airport
+        start_str (str): Start date in YYYYMMDD format
+        end_str (str): End date in YYYYMMDD format
+    Returns:
+        scores_df (pd.DataFrame): DataFrame containing verification scores
+        cts_vis (dict): Dictionary of contingency tables for visibility
+        cts_clb (dict): Dictionary of contingency tables for cloud base
+    """
+    gerrity_vis, peirce_vis, cts_vis = ps.main('vis', icao, start_str, end_str)
+    gerrity_clb, peirce_clb, cts_clb = ps.main('clb', icao, start_str, end_str)
+
+    # Create dataframe to hold scores
+    scores = {'Date': [end_str]}
+    for s_name_score, score in gerrity_vis.items():
+        scores[f'gerrity_vis_{s_name_score}'] = [score]
+    for s_name_score, score in gerrity_clb.items():
+        scores[f'gerrity_clb_{s_name_score}'] = [score]
+    for s_name_score, p_scores in peirce_vis.items():
+        for ind, score in enumerate(p_scores):
+            scores[f'peirce_vis_{s_name_score}_{ind}'] = [score]
+    for s_name_score, p_scores in peirce_clb.items():
+        for ind, score in enumerate(p_scores):
+            scores[f'peirce_clb_{s_name_score}_{ind}'] = [score]
+    scores_df = pd.DataFrame(scores)
+
+    return scores_df, cts_vis, cts_clb
 
 
 def update_configs_make_dirs(all_tafs):
@@ -336,7 +384,8 @@ def update_configs_make_dirs(all_tafs):
                  'metars_per_hour = 2\n']
 
         # Write lines to config file
-        with open(f'{DATA_DIR}/{t_type}.cfg', 'w') as t_file:
+        with open(f'{DATA_DIR}/{t_type}.cfg', 'w',
+                  encoding='utf-8') as t_file:
             t_file.writelines(lines)
 
 
