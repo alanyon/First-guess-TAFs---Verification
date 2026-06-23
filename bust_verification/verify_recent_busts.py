@@ -75,6 +75,8 @@ def main():
     big_stats = {'Airport': [], 'TAF Type': [], 'Bust Type': [], 
                  'Number of Busts': []}
     for icao, stats in icao_stats.items():
+        if icao not in icao_dict:
+            continue
         for key, busts in stats.items():
             taf_type, bust_type = key.split(' ')
             big_stats['Airport'].append(icao_dict[icao])
