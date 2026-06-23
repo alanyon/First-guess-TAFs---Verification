@@ -6,14 +6,14 @@ matrices show the distribution of forecast vs observed categories for
 each TAF type.
 
 Functions:
-    main(): Main function to create line plots and confusion matrices.
-    conf_figure(): Creates a figure of confusion matrices.
-    confusion_plots(): Creates confusion matrix heatmaps for each ICAO.
-    get_taf_type_long(): Converts short TAF type names to longer names.
-    line_figure(): Creates a line plot of rolling scores.
-    name_cols(): Renames columns to be more readable for plotting.
-    sample_shades(): Sample distinct hex colors from a colormap.
-    score_line_plots(): Creates line plots of rolling scores.
+    main: Main function to create line plots and confusion matrices.
+    conf_figure: Creates a figure of confusion matrices.
+    confusion_plots: Creates confusion matrix heatmaps for each ICAO.
+    get_taf_type_long: Converts short TAF type names to longer names.
+    line_figure: Creates a line plot of rolling scores.
+    name_cols: Renames columns to be more readable for plotting.
+    sample_shades: Sample distinct hex colors from a colormap.
+    score_line_plots: Creates line plots of rolling scores.
 
 Written by Andre Lanyon, 2026.
 """
@@ -64,7 +64,7 @@ def main():
         None
     """
     # Create line plots and confusion matrices
-    # score_line_plots()
+    score_line_plots()
     confusion_plots()
 
 
@@ -82,7 +82,7 @@ def conf_figure(icao, icao_file_list, param):
     """
     # Create figure with subplots stacked vertically
     num_files = len(icao_file_list)
-    fig, axes = plt.subplots(num_files, 1, figsize=(12, 5 * num_files))
+    fig, axes = plt.subplots(num_files, 1, figsize=(14, 5 * num_files))
 
     # Handle case where there's only one file
     if num_files == 1:
@@ -94,19 +94,56 @@ def conf_figure(icao, icao_file_list, param):
         # Load contingency table values into pandas dataframe
         ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file),
                             index_col=0)
+        
+        # Add in totals for rows and columns
+        ct_df.loc['Total Obs'] = ct_df.sum()
+        ct_df['Total Fcsts'] = ct_df.sum(axis=1)
 
         # Get parameter and TAF type from filename
-        param = file.split('_')[2]
         taf_type = file[12: -4]
 
         # Create labels
         cats = ct_df.shape[0]
-        fc_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
-        ob_labels = [TAF_CATS[param][str(i)] for i in range(cats)]
+        fc_labels = [TAF_CATS[param][str(i)] 
+                     for i in range(cats - 1)] + ['Total Obs']
+        ob_labels = [TAF_CATS[param][str(i)] 
+                     for i in range(cats - 1)] + ['Total Fcsts']
 
-        # Plot heatmap
-        sns.heatmap(ct_df, annot=True, fmt='g', cmap='Blues', cbar=False,
-                    ax=axes[idx], xticklabels=ob_labels, yticklabels=fc_labels)
+        # Create mask: True = don't colour
+        mask = np.zeros_like(ct_df, dtype=bool)
+        mask[-1, :] = True       # last row (Total Obs)
+        mask[:, -1] = True       # last column (Total Fcsts)
+
+        # Ensure white background for totals
+        axes[idx].set_facecolor('white')
+
+        # Plot heatmap without totals and without numbers
+        sns.heatmap(ct_df, annot=False, fmt='g', cmap='Blues', cbar=False,
+                    mask=mask, ax=axes[idx], xticklabels=ob_labels, 
+                    yticklabels=fc_labels)
+
+        # Add numbers to each cell with contrast logic
+        nrows, ncols = ct_df.shape
+        for i in range(nrows):
+            for j in range(ncols):
+                val = ct_df.iloc[i, j]
+
+                # Identify totals row/column
+                is_total = (i == nrows - 1) or (j == ncols - 1)
+
+                # Always black for totals
+                if is_total:
+                    text_color = 'black'
+                
+                # Only apply contrast logic to non-total cells
+                else:
+                    max_val = ct_df.iloc[:-1, :-1].values.max()
+                    threshold = max_val * 0.5
+                    text_color = 'white' if val > threshold else 'black'
+
+                # Add text to cell
+                axes[idx].text(j + 0.5, i + 0.5, f"{val:g}", ha='center',
+                               va='center', color=text_color)
 
         # Labels and title
         axes[idx].set_xticklabels(axes[idx].get_xticklabels(), rotation=0)
@@ -114,6 +151,14 @@ def conf_figure(icao, icao_file_list, param):
         axes[idx].set_ylabel('Forecast Category', fontsize=25, weight='bold')
         taf_type_long = get_taf_type_long(taf_type)
         axes[idx].set_title(taf_type_long, fontsize=30,  weight='bold')
+
+        # Add black border around totals row and column
+        axes[idx].add_patch(plt.Rectangle((ct_df.shape[1]-1, 0), 1, 
+                                           ct_df.shape[0], fill=False, 
+                                           edgecolor='black', lw=2))
+        axes[idx].add_patch(plt.Rectangle((0, ct_df.shape[0]-1), 
+                                          ct_df.shape[1], 1, fill=False, 
+                                          edgecolor='black', lw=2))
 
     # Save figure
     plt.tight_layout(pad=2.0)
@@ -228,6 +273,18 @@ def line_figure(icao, param, score_name, param_df, palette_13):
 
     # Convert dates
     score_df['Date'] = pd.to_datetime(score_df['Date'], format='%Y%m%d')
+
+    # Sort columns by reverse TAF type order
+    old_cols = score_df.columns.tolist()
+    new_cols = ['Date']
+    for taf_type in reversed(TYPE_ORDER):
+        for col in old_cols:
+            if taf_type in col:
+                if 'ml' in col and 'ml' not in taf_type:
+                    continue
+                new_cols.append(col)
+                break
+    score_df = score_df[new_cols]
 
     # Give nice column names for plotting
     score_df.columns = name_cols(score_df.columns)

@@ -32,11 +32,11 @@ export ORACLE_HOME=/usr/lib/oracle/23/client64
 export SHLIB_PATH=/usr/lib/oracle/23/client64/lib
 export PATH=$PATH:/usr/lib/oracle/23/client64/bin
 
-module load scitools/production-os46-3
+# module load scitools/production-os46-3
 
-python rolling.py
+# python rolling.py
 
-module unload scitools/production-os46-3
+# module unload scitools/production-os46-3
 
 conda activate default_clone_may_2026
 
