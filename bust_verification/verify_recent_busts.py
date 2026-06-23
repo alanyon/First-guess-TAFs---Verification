@@ -13,6 +13,7 @@ import pandas as pd
 # Define constants
 DATADIR = os.environ['DATA_DIR']
 PLOT_DIR = os.environ['PLOT_DIR']
+TAF_INFO_CSV = os.environ['TAF_INFO_CSV']
 TAF_TYPES = {
     'auto_opt': 'Optimistic Auto TAFs\n(no ML)',
     'auto_opt_up_1': 'Optimistic Auto TAFs\n(no ML) - Obs Update 1',
@@ -30,9 +31,6 @@ TAF_TYPES = {
 }
 BUST_TYPES = {'vis': 'Visibility Busts', 'cld': 'Cloud Busts', 
               'wind': 'Wind Busts', 'wx': 'Weather Busts', 'all': 'All Busts'}
-TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
-                'First-guess-TAFs---Verification/standard_verification/'
-                'taf_info.csv')
 
 # Set plotting style
 sns.set_style('darkgrid')
