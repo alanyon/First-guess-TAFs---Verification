@@ -94,7 +94,7 @@ def conf_figure(icao, icao_file_list, param):
         # Load contingency table values into pandas dataframe
         ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file),
                             index_col=0)
-        
+
         # Add in totals for rows and columns
         ct_df.loc['Total Obs'] = ct_df.sum()
         ct_df['Total Fcsts'] = ct_df.sum(axis=1)
@@ -104,9 +104,9 @@ def conf_figure(icao, icao_file_list, param):
 
         # Create labels
         cats = ct_df.shape[0]
-        fc_labels = [TAF_CATS[param][str(i)] 
+        fc_labels = [TAF_CATS[param][str(i)]
                      for i in range(cats - 1)] + ['Total Obs']
-        ob_labels = [TAF_CATS[param][str(i)] 
+        ob_labels = [TAF_CATS[param][str(i)]
                      for i in range(cats - 1)] + ['Total Fcsts']
 
         # Create mask: True = don't colour
@@ -119,7 +119,7 @@ def conf_figure(icao, icao_file_list, param):
 
         # Plot heatmap without totals and without numbers
         sns.heatmap(ct_df, annot=False, fmt='g', cmap='Blues', cbar=False,
-                    mask=mask, ax=axes[idx], xticklabels=ob_labels, 
+                    mask=mask, ax=axes[idx], xticklabels=ob_labels,
                     yticklabels=fc_labels)
 
         # Add numbers to each cell with contrast logic
@@ -134,7 +134,7 @@ def conf_figure(icao, icao_file_list, param):
                 # Always black for totals
                 if is_total:
                     text_color = 'black'
-                
+
                 # Only apply contrast logic to non-total cells
                 else:
                     max_val = ct_df.iloc[:-1, :-1].values.max()
@@ -153,11 +153,11 @@ def conf_figure(icao, icao_file_list, param):
         axes[idx].set_title(taf_type_long, fontsize=30,  weight='bold')
 
         # Add black border around totals row and column
-        axes[idx].add_patch(plt.Rectangle((ct_df.shape[1]-1, 0), 1, 
-                                           ct_df.shape[0], fill=False, 
+        axes[idx].add_patch(plt.Rectangle((ct_df.shape[1]-1, 0), 1,
+                                           ct_df.shape[0], fill=False,
                                            edgecolor='black', lw=2))
-        axes[idx].add_patch(plt.Rectangle((0, ct_df.shape[0]-1), 
-                                          ct_df.shape[1], 1, fill=False, 
+        axes[idx].add_patch(plt.Rectangle((0, ct_df.shape[0]-1),
+                                          ct_df.shape[1], 1, fill=False,
                                           edgecolor='black', lw=2))
 
     # Save figure

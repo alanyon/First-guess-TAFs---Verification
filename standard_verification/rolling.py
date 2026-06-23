@@ -64,6 +64,11 @@ def main():
     # Loop through airport info dataframe to get ICAOs
     for _, row in AIRPORT_INFO.iterrows():
 
+        # Ignore long TAFs for London City (verification code can't deal
+        # with two TAFs with same ICAO)
+        if row['airport_name'] == 'London City (long)':
+            continue
+
         # Ignore defence TAFs
         if row['bench'] == 'defence':
             continue
