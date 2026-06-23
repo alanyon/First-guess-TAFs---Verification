@@ -64,7 +64,7 @@ def main():
         None
     """
     # Create line plots and confusion matrices
-    score_line_plots()
+    # score_line_plots()
     confusion_plots()
 
 
@@ -106,15 +106,12 @@ def conf_figure(icao, icao_file_list, param):
 
         # Plot heatmap
         sns.heatmap(ct_df, annot=True, fmt='g', cmap='Blues', cbar=False,
-                    ax=axes[idx], xticklabels=ob_labels,
-                    yticklabels=fc_labels)
+                    ax=axes[idx], xticklabels=ob_labels, yticklabels=fc_labels)
 
         # Labels and title
         axes[idx].set_xticklabels(axes[idx].get_xticklabels(), rotation=0)
-        axes[idx].set_xlabel('Observed Category', fontsize=25,
-                            weight='bold')
-        axes[idx].set_ylabel('Forecast Category', fontsize=25,
-                            weight='bold')
+        axes[idx].set_xlabel('Observed Category', fontsize=25, weight='bold')
+        axes[idx].set_ylabel('Forecast Category', fontsize=25, weight='bold')
         taf_type_long = get_taf_type_long(taf_type)
         axes[idx].set_title(taf_type_long, fontsize=30,  weight='bold')
 
@@ -181,7 +178,7 @@ def get_taf_type_long(short_name):
         return type_map['manual']
 
     # Determine if TAF type is with or without ML
-    ml_status = 'no ML' if 'ml' in short_name else 'with ML'
+    ml_status = 'with ML' if 'ml' in short_name else 'no ML'
 
     # Loop through type_map to find matching key in short_name
     for key, template in type_map.items():

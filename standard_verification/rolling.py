@@ -71,7 +71,7 @@ def main():
         # Try to calculate scores (fails if no TAF data, hence except)
         try:
             calc_scores(row, start_dt, end_dt)
-        except (FileNotFoundError, KeyError, ValueError) as e:
+        except OSError as e:
             print(f"Error processing ICAO {row['icao']}: {e}")
 
 
