@@ -63,6 +63,10 @@ def main():
         # Extract the stats from the data dictionary
         all_stats = data['all_stats']
 
+        # Remove any icao that is not in the icao_dict
+        all_stats = {icao: stats for icao, stats in all_stats.items() 
+                     if icao in icao_dict}
+
         # Add the stats to the overall icao stats dictionary
         for icao, stats in all_stats.items():
             if icao in icao_stats:
@@ -75,8 +79,6 @@ def main():
     big_stats = {'Airport': [], 'TAF Type': [], 'Bust Type': [], 
                  'Number of Busts': []}
     for icao, stats in icao_stats.items():
-        if icao not in icao_dict:
-            continue
         for key, busts in stats.items():
             taf_type, bust_type = key.split(' ')
             big_stats['Airport'].append(icao_dict[icao])
