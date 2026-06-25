@@ -39,10 +39,10 @@ TAF_CATS = {'vis': {'0': '<=300m', '1': '300-750m', '2': '800-1400m',
                     '3': '1500-4900m', '4': '5000-9000m', '5': '>=10000m'},
             'clb': {'0': '<=100ft', '1': '200-400ft', '2': '500-900ft',
                     '3': '1000-1400ft', '4': '>=1500ft'}}
-TYPE_ORDER = ['manual', 'pes_obs_update_2_ml', 'pes_obs_update_2',
-              'pes_obs_update_1_ml', 'pes_obs_update_1', 'pes_no_obs_ml',
-              'pes_no_obs', 'opt_obs_update_2_ml', 'opt_obs_update_2',
-              'opt_obs_update_1_ml', 'opt_obs_update_1', 'opt_no_obs_ml',
+TYPE_ORDER = ['manual', 'pes_obs_update_2_ml', 'pes_obs_update_1_ml', 
+              'pes_no_obs_ml', 'pes_obs_update_2', 'pes_obs_update_1',
+              'pes_no_obs', 'opt_obs_update_2_ml', 'opt_obs_update_1_ml', 
+              'opt_no_obs_ml', 'opt_obs_update_2', 'opt_obs_update_1',
               'opt_no_obs']
 
 # Load in airport info, mapping icaos to airport names
