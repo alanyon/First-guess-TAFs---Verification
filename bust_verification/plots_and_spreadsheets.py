@@ -398,12 +398,44 @@ def plot_summary(summary_stats):
     ax.legend(loc='upper left', bbox_to_anchor=(1.08, 1), fontsize=18)
     ax.set_xlabel('Number of Busts', fontsize=24, weight='bold')
     ax.set_ylabel('Bust Type', fontsize=24, weight='bold')
-    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='x', labelsize=10)
     ax.tick_params(axis='y', labelsize=19)
 
     # Save and close figure
     plt.tight_layout()
     fig.savefig(f'{cf.D_DIR}/plots/summary_busts_ml.png')
+    plt.close()
+
+
+def plot_summary_small(summary_stats):
+    """
+    Plots summary bar chart showing bust information.
+
+    Args:
+        summary_stats (dict): Dictionary of summary stats
+    Returns:
+        None
+    """
+    # Create bar plot
+    fig, ax = plt.subplots(figsize=(14, 8))
+    sns.barplot(data=summary_stats, x='Number of Busts', y='Bust Type',
+                hue='TAF Type')
+
+    # Add scores on top of bars
+    for ind in ax.containers:
+        ax.bar_label(ind, fontsize=16)
+
+    # Format axes, etc
+    ax.legend(loc='upper left', bbox_to_anchor=(1.1, 1), fontsize=18)
+    ax.set_xlabel('Number of Busts', fontsize=22, weight='bold')
+    ax.set_ylabel('Bust Type', fontsize=22, weight='bold')
+    ax.xaxis.set_major_locator(plt.MaxNLocator(nbins=5))
+    ax.tick_params(axis='x', labelsize=16)
+    ax.tick_params(axis='y', labelsize=16)
+
+    # Save and close figure
+    plt.tight_layout()
+    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_all_small.png')
     plt.close()
 
 
