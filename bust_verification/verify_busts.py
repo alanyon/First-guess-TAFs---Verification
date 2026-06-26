@@ -74,11 +74,11 @@ def main(load_data):
     ps.plot_param(holders, 'wind', summary_stats)
 
     # TESTING #
-    # # Keep only totals and significant weather bust types
-    # summary_stats = pd.DataFrame(summary_stats)
-    # summary_stats = summary_stats[summary_stats['Bust Type'].isin(
-    #     ['Total\nvisibility busts', 'Significant\nweather busts', 
-    #      'Total\ncloud busts', 'Total\nwind busts'])]
+    # Keep only totals and significant weather bust types
+    summary_stats = pd.DataFrame(summary_stats)
+    summary_stats = summary_stats[summary_stats['Bust Type'].isin(
+        ['Total\nvisibility busts', 'Significant\nweather busts', 
+         'Total\ncloud busts', 'Total\nwind busts'])]
 
     ps.plot_summary(summary_stats)
     # ps.plot_wx(holders)
