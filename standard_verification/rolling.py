@@ -50,7 +50,7 @@ def main():
 
     # Start 90 days before yesterday and end 90 days later
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
-    start_dt = end_dt - timedelta(days=90)
+    start_dt = end_dt - timedelta(days=180)
 
     # Get TAFs for 90 day period
     all_tafs = get_tafs(start_dt, end_dt)
