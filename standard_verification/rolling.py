@@ -1,5 +1,5 @@
 """
-Module to extract recent TAFs (previous 90 days) and calculate
+Module to extract recent TAFs (previous 180 days) and calculate
 verification scores for each TAF type and airport. The scores are saved
 to a CSV file for each airport.
 
@@ -48,11 +48,11 @@ def main():
         os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
     os.system(f'rm -rf {DATA_DIR}/decodes/*')
 
-    # Start 90 days before yesterday and end 90 days later
+    # Start 180 days before yesterday and end 180 days later
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
     start_dt = end_dt - timedelta(days=180)
 
-    # Get TAFs for 90 day period
+    # Get TAFs for 180 day period
     all_tafs = get_tafs(start_dt, end_dt)
 
     # Decode TAFs
