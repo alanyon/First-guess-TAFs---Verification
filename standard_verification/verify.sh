@@ -10,7 +10,7 @@
 source setup_constants.sh
 
 # Activate conda environment
-module load scitools/production-os46-3
+module load scitools/production-os48-1
 
 # Update config files
 python update_configs.py

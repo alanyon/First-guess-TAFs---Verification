@@ -4,7 +4,7 @@
 source setup_constants.sh
 
 # Activate conda environment
-conda activate default_clone
+conda activate default_clone_may_2026
 
 # Make decode directorY if necessary
 if [ ! -d "${DECODE_DIR}" ]; then
