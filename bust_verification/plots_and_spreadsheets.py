@@ -403,7 +403,7 @@ def plot_summary(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_ml.png')
+    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_{cf.PROFILE}.png')
     plt.close()
 
 

@@ -5,6 +5,7 @@
 # Supported profiles:
 #   standard - Optimistic/Pessimistic auto TAFs vs Manual TAFs (default)
 #   ml       - Auto TAFs before/after machine learning vs Manual TAFs
+#   fog      - Auto TAFs before/after fog machine learning vs Manual TAFs
 export VERIF_PROFILE=${VERIF_PROFILE:-standard}
 
 # For decoding and verification of TAFs
@@ -40,9 +41,18 @@ case "${VERIF_PROFILE}" in
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=0.25
         ;;
+    fog)
+        export TAF_TYPES="no_pes_all no_pes_ml_all_fog Manual_ml"
+        export TAF_TYPES_SHORT="p2 f2 ma"
+        export COMBS="p2f2 f2ma"
+        export PLOT_TITLES='{"p2": "Auto TAFs (without fog ML)",
+                             "f2": "Auto TAFs (with fog ML)",
+                             "ma": "Manual TAFs"}'
+        export ML_FACTOR=1
+        ;;
     *)
         echo "Unknown VERIF_PROFILE='${VERIF_PROFILE}'." \
-             "Valid options: standard, ml" >&2
+             "Valid options: standard, ml, fog" >&2
         exit 1
         ;;
 esac

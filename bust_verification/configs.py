@@ -8,9 +8,13 @@ import json
 
 # Import environment variables
 D_DIR = os.environ['DATA_DIR']
-# Verification setup (standard / ml); used to keep each setup's output
+# Verification setup (standard / ml / fog); used to keep each setup's output
 # filenames distinct so runs don't overwrite one another
 PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
+# Directory for pickled bust data, kept per-profile so a fog (or ml) run
+# doesn't overwrite the standard run's pickles
+PICKLE_DIR = f'{D_DIR}/pickles' if PROFILE == 'standard' \
+    else f'{D_DIR}/pickles_{PROFILE}'
 T_STRS = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
@@ -80,6 +84,15 @@ REQ_ICAO_STRS = {
     'EGPH': 'Edinburgh', 'EGPI': 'Islay', 'EGPK': 'Prestwick', 
     'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
     'EGSS': 'Stansted', 'EGTE': 'Exeter', 'EGTK': 'Oxford', 'EGHQ': 'Newquay'}
+
+# The fog ML experiment only covers a subset of airports; restrict to these
+# when running the fog profile so busts are computed only for them.
+if PROFILE == 'fog':
+    FOG_ICAOS = ['EGCC', 'EGKK', 'EGLL']
+    REQ_ICAO_STRS = {icao: name for icao, name in REQ_ICAO_STRS.items()
+                     if icao in FOG_ICAOS}
+    REQ_ICAOS = [icao for icao in REQ_ICAOS
+                 if icao.decode().strip() in FOG_ICAOS]
 
 NINE_HR_STRS = {
     'EGAC': 'Belfast City', 'EGAE': 'Londonderry', 'EGBJ': 'Gloucester',

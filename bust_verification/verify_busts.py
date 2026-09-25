@@ -444,7 +444,7 @@ def get_holders(load_data):
     """
     # Load in pickled data if required
     if load_data != 'yes':
-        return {name: uf.unpickle_data(f'{cf.D_DIR}/pickles_2/{name}')
+        return {name: uf.unpickle_data(f'{cf.PICKLE_DIR}/{name}')
                 for name in cf.NAMES}
 
     # Otherwise, create empty dictionaries
@@ -564,7 +564,7 @@ def get_new_data(holders, load_data):
         return
 
     # Process every day in the verification period
-    process_days(holders, cf.DAYS, f'{cf.D_DIR}/pickles')
+    process_days(holders, cf.DAYS, cf.PICKLE_DIR)
 
 
 def process_days(holders, days, pickle_dir):
@@ -658,7 +658,7 @@ def run_worker(chunk_id, num_chunks):
     days = get_chunk_days(chunk_id, num_chunks)
 
     # Process the assigned days, pickling into a chunk-specific directory
-    pickle_dir = f'{cf.D_DIR}/pickles/chunk_{chunk_id}'
+    pickle_dir = f'{cf.PICKLE_DIR}/chunk_{chunk_id}'
     process_days(holders, days, pickle_dir)
 
 
@@ -716,7 +716,7 @@ def run_merge(num_chunks):
     # Start from empty holders and merge every chunk into them
     holders = make_empty_holders()
     for chunk_id in range(num_chunks):
-        pickle_dir = f'{cf.D_DIR}/pickles/chunk_{chunk_id}'
+        pickle_dir = f'{cf.PICKLE_DIR}/chunk_{chunk_id}'
         chunk = {name: uf.unpickle_data(f'{pickle_dir}/{name}')
                  for name in cf.NAMES}
         for name in cf.NAMES:
@@ -724,7 +724,7 @@ def run_merge(num_chunks):
 
     # Save merged holders to main pickle directory for later re-plotting
     for name, data in holders.items():
-        uf.pickle_data(data, f'{cf.D_DIR}/pickles/{name}')
+        uf.pickle_data(data, f'{cf.PICKLE_DIR}/{name}')
 
     # Produce plots from the merged data
     make_plots(holders)

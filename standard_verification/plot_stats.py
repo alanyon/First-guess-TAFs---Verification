@@ -70,11 +70,10 @@ TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 NUM_CATS = {'vis': 6, 'clb': 5}
 # Category labels for contingency tables (match config thresholds:
 # vis_cats [350, 800, 1500, 5000, 10000], clb_cats [200, 500, 1000, 1500])
-TAF_CATS = {
-    'vis': ['<350m', '350-800m', '800-1500m', '1500-5000m', '5000-10000m',
-            '>=10000m'],
-    'clb': ['<200ft', '200-500ft', '500-1000ft', '1000-1500ft', '>=1500ft'],
-}
+TAF_CATS = {'vis': {1: '<=300m', 2: '350-750m', 3: '800-1400m', 4: '1500-4900m', 
+                5: '5000-9000m', 6: '>=10000m'},
+            'clb': {1: '<=100ft', 2: '200-400ft', 3: '500-900ft', 4: '1000-1400ft',
+                5: '>=1500ft'}}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {
     'vis_9': [0.408, 'blue', '9-hr visibility target'],
@@ -819,7 +818,10 @@ def confusion_plot(all_stats, icao, icao_dict):
         if icao not in stats_dict:
             continue
         i_stats = stats_dict[icao]
-        cat_labels = TAF_CATS[param]
+        # Build category labels as an ordered list from the TAF_CATS dict
+        # (as done in plot_rolling.py), one label per category
+        cat_labels = [TAF_CATS[param][cat]
+                      for cat in range(1, NUM_CATS[param] + 1)]
 
         # One subplot per TAF type, stacked vertically
         fig, axes = plt.subplots(len(taf_types), 1,
@@ -1060,7 +1062,7 @@ def sp_box_plot(stats_dict, param):
     plot_stats = pd.DataFrame(p_stats)
 
     # Map categories to names in CATS dictionary
-    plot_stats['Category'] = plot_stats['Category'].map(CATS[param])
+    plot_stats['Category'] = plot_stats['Category'].map(TAF_CATS[param])
 
     # # Remove rows with Random Forest
     # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
