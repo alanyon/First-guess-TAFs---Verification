@@ -3,8 +3,14 @@
 # Load in constants 
 source setup_constants.sh
 
+# Report which setup is being decoded so runs feeding verify.sh (standard
+# verification) and verify_busts.sh (bust verification) are unambiguous.
+# Override with e.g. `export VERIF_PROFILE=ml` before running this script.
+echo "Decoding TAFs for VERIF_PROFILE='${VERIF_PROFILE}'"
+echo "TAF types: ${TAF_TYPES}"
+
 # Activate conda environment
-conda activate default_clone
+conda activate default_clone_may_2026
 
 # Make decode directorY if necessary
 if [ ! -d "${DECODE_DIR}" ]; then
@@ -14,8 +20,9 @@ fi
 # Loop through all taf types
 for taf_type in ${TAF_TYPES}; do
 
-    # Ignore Manual taf type
-    if [[ "${taf_type}" == *"Manual"* ]]; then
+    # Ignore Manual taf type (any profile's manual type, e.g. Manual or
+    # Manual_ml); manual TAFs are read directly from Oracle, not decoded
+    if [[ "${taf_type}" == *Manual* ]]; then
         continue
     fi
 
@@ -27,8 +34,8 @@ for taf_type in ${TAF_TYPES}; do
         mkdir "${DECODE_DIR}/Output_${taf_type}"
     fi
 
-    # Inport TAFs
-    taf_files="${DATA_DIR}/tafs/*${taf_type}.txt"
+    # Import TAFs
+    taf_files="${DATA_DIR}/tafs/*${taf_type}*txt"
     cat ${taf_files} > ${DECODE_DIR}/Input_${taf_type}/tafs.txt
 
     # Convert TAFs into correct format and save to output directory

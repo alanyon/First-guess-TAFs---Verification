@@ -56,16 +56,25 @@ PLOT_TITLES = os.environ.get('PLOT_TITLES')
 TAF_TYPES_PLOT = json.loads(PLOT_TITLES)
 ML_FACTOR = float(os.environ['ML_FACTOR'])
 
+# Keep each verification profile's plots in its own directory (e.g.
+# .../stats/plots/standard, .../stats/plots/ml) so standard and ML runs
+# never overwrite one another.
+PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
+PLOTS_DIR = f'{STATS_DIR}/plots/{PROFILE}'
+
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES_DICT.items()}
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 NUM_CATS = {'vis': 6, 'clb': 5}
-CATS = {'vis': {1: '<=300m', 2: '350-750m', 3: '800-1400m', 4: '1500-4900m', 
-                5: '5000-9000m', 6: '>=10000m'},
-        'clb': {1: '<=100ft', 2: '200-400ft', 3: '500-900ft', 4: '1000-1400ft',
-                5: '>=1500ft'}}
+# Category labels for contingency tables (match config thresholds:
+# vis_cats [350, 800, 1500, 5000, 10000], clb_cats [200, 500, 1000, 1500])
+TAF_CATS = {
+    'vis': ['<350m', '350-800m', '800-1500m', '1500-5000m', '5000-10000m',
+            '>=10000m'],
+    'clb': ['<200ft', '200-500ft', '500-1000ft', '1000-1500ft', '>=1500ft'],
+}
 SCORES = {'g': 'Gerrity', 'sp': 'Peirce', 'bp': 'Peirce'}
 TARGETS = {
     'vis_9': [0.408, 'blue', '9-hr visibility target'],
@@ -90,9 +99,10 @@ def main(req_obs, unc):
         unc (str): String to add to filenames if uncertainty is included
     """
     # Make directories if needed
-    for p_dir in ['rl_plots', 'scatter_plots', 'g_plots', 'sp_plots']:
-        if not os.path.exists(f'{STATS_DIR}/{p_dir}'):
-            os.makedirs(f'{STATS_DIR}/{p_dir}')
+    for p_dir in ['rl_plots', 'scatter_plots', 'g_plots', 'sp_plots',
+                  'airport_plots', 'confusion_plots']:
+        if not os.path.exists(f'{PLOTS_DIR}/{p_dir}'):
+            os.makedirs(f'{PLOTS_DIR}/{p_dir}')
 
     # Get dictionary mapping ICAOs to airport names
     icao_dict = get_icao_dict()
@@ -115,14 +125,21 @@ def main(req_obs, unc):
 
         all_stats[param] = stats_dict
 
-        # Make plots for all combinations of TAF types
-        for comb in COMBS:
+    # Combined visibility + cloud scatter plots: one figure per TAF-type
+    # combination, with both parameters side by side sharing a single legend
+    for comb in COMBS:
 
-            # Scatter plots showing Gerrity scores for all airports
-            make_plot(param, color_dict, stats_dict, 'g', unc, comb, icao_dict)
+        # Scatter plots showing Gerrity scores for all airports
+        make_plot(color_dict, all_stats, 'g', unc, comb, icao_dict)
 
     # Create Gerrity score box plots
     g_box_plot(all_stats)
+
+    # One summary figure per airport (Gerrity and Peirce skill scores for
+    # visibility and cloud base, comparing all TAF types)
+    for icao in sorted(set(all_stats['vis']) & set(all_stats['clb'])):
+        airport_plot(all_stats, icao, icao_dict, unc)
+        confusion_plot(all_stats, icao, icao_dict, unc)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -187,15 +204,14 @@ def add_detail(ax, lim_min, lim_max, lim_diff, comb):
     ax.fill_between(lims, lims, lim_min, color='green', alpha=0.05)
     ax.fill_between(lims, lims, lim_max, color='red', alpha=0.05)
 
-    # Positions for extra text
-    positions = [.05, .85, .68, .05]
-    mgx, mgy, asx, asy = [lim_min + pos * lim_diff for pos in positions]
-
-    # Add extra text
-    ax.text(mgx, mgy, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
-            c='red', fontsize=15)
-    ax.text(asx, asy, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
-            c='green', fontsize=15)
+    # Add corner annotations in axes-fraction coordinates with alignment so
+    # the text always stays inside the plot regardless of its length
+    ax.text(0.03, 0.97, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
+            c='red', fontsize=13, weight='bold', transform=ax.transAxes,
+            ha='left', va='top')
+    ax.text(0.97, 0.03, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
+            c='green', fontsize=13, weight='bold', transform=ax.transAxes,
+            ha='right', va='bottom')
 
     return ax
 
@@ -502,6 +518,7 @@ def get_stats(param, unc, req_obs):
     # Define stats file
     stats_file = f'{STATS_DIR}/{param}_stats_{TAF_TYPES_FNAME}{unc}.csv'
 
+
     # Dictionary to add stats to
     stats_dict = {}
 
@@ -610,21 +627,21 @@ def get_strings(score, param, length, cat, unc, comb):
     # Plot title and fname
     title = f'{PARAMS[param]} {SCORES[score]} Skill Scores{t_extra}'
     imdir = 'scatter_plots'
-    fname = (f'{STATS_DIR}/{imdir}/{param}_{comb}_{score}_scatter'
+    fname = (f'{PLOTS_DIR}/{imdir}/{param}_{comb}_{score}_scatter'
              f'{f_extra}{unc}.png')
 
     return title, fname, key_1, key_2
 
 
-def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
+def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
               length='', cat=''):
     """
-    Creates a scatter plot.
+    Creates a combined scatter plot with visibility and cloud base shown
+    side by side on the same figure, sharing a single legend.
 
     Args:
-        param (str): Parameter to verify
         color_dict (dict): Dictionary of colours to use for each airport
-        stats_dict (dict): Dictionary of stats
+        all_stats (dict): Dictionary of stats keyed by parameter
         score (str): Score to plot
         unc (str): String to add to filenames if uncertainty is included
         comb (str): Combination of TAF types to plot
@@ -634,52 +651,258 @@ def make_plot(param, color_dict, stats_dict, score, unc, comb, icao_dict,
     Returns:
         None
     """
-    # Define title, fname and keys for extracting data from stats dict
-    title, fname, key_1, key_2 = get_strings(score, param, length, cat, unc,
-                                             comb)
+    # One subplot per parameter (visibility and cloud base) side by side
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
-    # Extract data from stats dictionary
-    airports, stats_1, stats_2 = extract_data(stats_dict, key_1, key_2, cat,
-                                              param)
+    for ax, param in zip(axes, PARAMS):
 
-    # Set axes limits for plots
-    lim_min, lim_max, lim_diff = set_lims(stats_1, stats_2)
+        stats_dict = all_stats[param]
 
-    # Define figure and axes
-    fig, ax = plt.subplots()
+        # Define title and keys for extracting data from stats dict
+        title, _, key_1, key_2 = get_strings(score, param, length, cat, unc,
+                                              comb)
 
-    # Set axes limits
-    ax.set_xlim(lim_min, lim_max)
-    ax.set_ylim(lim_min, lim_max)
+        # Extract data from stats dictionary
+        airports, stats_1, stats_2 = extract_data(stats_dict, key_1, key_2,
+                                                  cat, param)
 
-    # Plot text, lines and shading depending on type of plot
+        # Set axes limits for plots
+        lim_min, lim_max, lim_diff = set_lims(stats_1, stats_2)
+        ax.set_xlim(lim_min, lim_max)
+        ax.set_ylim(lim_min, lim_max)
+
+        # Plot text, lines and shading depending on type of plot
+        if length:
+            add_length_detail(ax, param, length, lim_min, lim_max, lim_diff,
+                              comb)
+        else:
+            add_detail(ax, lim_min, lim_max, lim_diff, comb)
+
+        # Plot scatter points for each airport
+        for stat_1, stat_2, airport in zip(stats_1, stats_2, airports):
+            label = icao_dict[airport]
+            ax.scatter(stat_1, stat_2, color=color_dict[airport]['colour'],
+                       s=color_dict[airport]['size'],
+                       marker=color_dict[airport]['marker'], label=label,
+                       edgecolor='black', linewidth=1)
+
+        # Set titles and axis labels
+        ax.set_title(title, fontsize=18, weight='bold')
+        ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}',
+                      fontsize=14, weight='bold')
+        ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}',
+                      fontsize=14, weight='bold')
+
+    # Build a single shared legend covering every airport from both subplots
+    handles_labels = {}
+    for ax in axes:
+        for handle, lbl in zip(*ax.get_legend_handles_labels()):
+            handles_labels.setdefault(lbl, handle)
+    fig.legend(list(handles_labels.values()), list(handles_labels.keys()),
+               loc='center left', bbox_to_anchor=(1.0, 0.5), ncol=2,
+               fontsize=11)
+
+    # Filename for the combined figure
+    f_extra = ''
     if length:
-        ax = add_length_detail(ax, param, length, lim_min, lim_max, lim_diff,
-                               comb)
-    else:
-        ax = add_detail(ax, lim_min, lim_max, lim_diff, comb)
-
-    # Plot scatter points for each airport
-    for stat_1, stat_2, airport in zip(stats_1, stats_2, airports):
-        label = icao_dict[airport]
-        ax.scatter(stat_1, stat_2, color=color_dict[airport]['colour'],
-                   s=color_dict[airport]['size'],
-                   marker=color_dict[airport]['marker'], label=label,
-                   edgecolor='black', linewidth=1)
-
-    # Set titles, legend, etc
-    ax.set_title(title, fontsize=20, weight='bold')
-    ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}', fontsize=14,
-                  weight='bold')
-    ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}', fontsize=14,
-                  weight='bold')
-    if param == 'clb':
-        ax.legend(loc='upper center', ncol=2, fontsize=12,
-                  bbox_to_anchor=(1.5, 1.1))
+        f_extra += f'_{length}hr'
+    if cat:
+        f_extra += f'_cat_{cat}'
+    fname = (f'{PLOTS_DIR}/scatter_plots/{comb}_{score}_scatter'
+             f'{f_extra}{unc}.png')
 
     # Save and close figure
+    fig.tight_layout()
     fig.savefig(fname, bbox_inches='tight')
     plt.close()
+
+
+def airport_plot(all_stats, icao, icao_dict, unc):
+    """
+    Creates a single summary figure for one airport.
+
+    The figure has a 2x2 layout: rows are the parameters (visibility and
+    cloud base) and columns show (left) the overall Gerrity skill score and
+    (right) the Peirce skill score for each TAF category. Bars are coloured
+    by TAF type, with a single shared legend.
+
+    Args:
+        all_stats (dict): Dictionary of stats keyed by parameter
+        icao (str): ICAO code of the airport to plot
+        icao_dict (dict): Dictionary mapping ICAO codes to airport names
+        unc (str): String to add to filenames if uncertainty is included
+    Returns:
+        None
+    """
+    # Consistent colour per TAF type, matching the overall Gerrity and
+    # Peirce box plots (seaborn's default "deep" palette, in the same
+    # op -> pe -> ma order used there)
+    taf_types = list(TAF_TYPES_PLOT.items())
+    n_types = len(taf_types)
+    palette = sns.color_palette('deep', n_types)
+    width = 0.8 / n_types
+
+    # 2 rows (parameters) x 2 columns (overall Gerrity, per-category Peirce)
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+    for row, param in enumerate(PARAMS):
+
+        i_stats = all_stats[param][icao]
+        ncats = NUM_CATS[param]
+
+        # Left column: overall Gerrity skill score, one bar per TAF type
+        ax = axes[row, 0]
+        xg = np.arange(n_types)
+        for i, (short, name) in enumerate(taf_types):
+            val = i_stats.get(f'g_{short}', np.nan)
+            ax.bar(xg[i], val, 0.6, label=name, color=palette[i],
+                   edgecolor='black', linewidth=0.6)
+        ax.axhline(0, color='grey', linewidth=0.8)
+        ax.set_xticks(xg)
+        ax.set_xticklabels([])
+        ax.set_xlabel('TAF Type', weight='bold')
+        ax.set_ylabel('Gerrity Skill Score', weight='bold')
+        ax.set_title(f'{PARAMS[param]} \u2013 Overall Gerrity Skill',
+                     weight='bold', fontsize=14)
+
+        # Right column: Peirce skill score for each TAF category
+        ax = axes[row, 1]
+        cats = np.arange(1, ncats + 1)
+        xc = np.arange(ncats)
+        for i, (short, name) in enumerate(taf_types):
+            vals = [i_stats.get(f'sp_{short}_{c}', np.nan) for c in cats]
+            ax.bar(xc + (i - (n_types - 1) / 2) * width, vals, width,
+                   label=name, color=palette[i], edgecolor='black',
+                   linewidth=0.6)
+        ax.axhline(0, color='grey', linewidth=0.8)
+        ax.set_xticks(xc)
+        ax.set_xticklabels([str(c) for c in cats])
+        ax.set_xlabel('TAF Category', weight='bold')
+        ax.set_ylabel('Peirce Skill Score', weight='bold')
+        ax.set_title(f'{PARAMS[param]} \u2013 Peirce Skill by Category',
+                     weight='bold', fontsize=14)
+
+    # Single shared legend for all subplots
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=n_types,
+               fontsize=13, title='TAF Type', bbox_to_anchor=(0.5, -0.01))
+
+    # Overall title using the airport name
+    airport_name = icao_dict.get(icao, icao)
+    fig.suptitle(f'{airport_name} ({icao}) \u2013 TAF Verification Skill '
+                 'Scores', weight='bold', fontsize=18)
+
+    # Save and close figure
+    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
+    fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_{TAF_TYPES_FNAME}'
+             f'{unc}.png')
+    fig.savefig(fname, bbox_inches='tight')
+    plt.close()
+
+
+def confusion_plot(all_stats, icao, icao_dict, unc):
+    """
+    Creates contingency-table (confusion-matrix) heatmaps for one airport.
+
+    One figure is produced per parameter (visibility and cloud base), with
+    the contingency table for each TAF type stacked vertically. Rows are
+    forecast categories, columns are observed categories, with marginal
+    totals. Ported from the rolling branch's confusion-matrix style but
+    sourcing values from the stats dictionary.
+
+    Args:
+        all_stats (dict): Dictionary of stats keyed by parameter
+        icao (str): ICAO code of the airport to plot
+        icao_dict (dict): Dictionary mapping ICAO codes to airport names
+        unc (str): String to add to filenames if uncertainty is included
+    Returns:
+        None
+    """
+    airport_name = icao_dict.get(icao, icao)
+    taf_types = list(TAF_TYPES_PLOT.items())
+
+    for param in PARAMS:
+
+        stats_dict = all_stats[param]
+        if icao not in stats_dict:
+            continue
+        i_stats = stats_dict[icao]
+        cat_labels = TAF_CATS[param]
+
+        # One subplot per TAF type, stacked vertically
+        fig, axes = plt.subplots(len(taf_types), 1,
+                                 figsize=(9, 7 * len(taf_types)))
+        if len(taf_types) == 1:
+            axes = [axes]
+
+        for ax, (short, name) in zip(axes, taf_types):
+
+            ct = i_stats.get(f'ct_{short}')
+            if ct is None:
+                ax.axis('off')
+                continue
+
+            # Forecast (rows) vs observed (columns) contingency table.
+            # add_cts stores values indexed [observed][forecast], so the
+            # transpose gives forecast-by-observed.
+            mat = np.array(ct).T
+            ct_df = pd.DataFrame(mat, index=cat_labels, columns=cat_labels)
+
+            # Add marginal totals
+            ct_df.loc['Total Obs'] = ct_df.sum()
+            ct_df['Total Fcsts'] = ct_df.sum(axis=1)
+
+            fc_labels = cat_labels + ['Total Obs']
+            ob_labels = cat_labels + ['Total Fcsts']
+
+            # Mask the totals row/column so they are not colour-shaded
+            mask = np.zeros_like(ct_df, dtype=bool)
+            mask[-1, :] = True
+            mask[:, -1] = True
+            ax.set_facecolor('white')
+
+            # Plot heatmap (colour only the main table)
+            sns.heatmap(ct_df, annot=False, cmap='Blues', cbar=False,
+                        mask=mask, ax=ax, xticklabels=ob_labels,
+                        yticklabels=fc_labels)
+
+            # Annotate every cell, choosing text colour for contrast
+            nrows, ncols = ct_df.shape
+            max_val = ct_df.iloc[:-1, :-1].values.max()
+            for i in range(nrows):
+                for j in range(ncols):
+                    val = ct_df.iloc[i, j]
+                    is_total = (i == nrows - 1) or (j == ncols - 1)
+                    if is_total:
+                        text_color = 'black'
+                    else:
+                        text_color = 'white' if val > max_val * 0.5 \
+                            else 'black'
+                    ax.text(j + 0.5, i + 0.5, f'{val:.0f}', ha='center',
+                            va='center', color=text_color)
+
+            # Labels and title
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+            ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+            ax.set_xlabel('Observed Category', fontsize=14, weight='bold')
+            ax.set_ylabel('Forecast Category', fontsize=14, weight='bold')
+            ax.set_title(name, fontsize=16, weight='bold')
+
+            # Black border around the totals row and column
+            ax.add_patch(plt.Rectangle((ct_df.shape[1] - 1, 0), 1,
+                                       ct_df.shape[0], fill=False,
+                                       edgecolor='black', lw=2))
+            ax.add_patch(plt.Rectangle((0, ct_df.shape[0] - 1),
+                                       ct_df.shape[1], 1, fill=False,
+                                       edgecolor='black', lw=2))
+
+        fig.suptitle(f'{airport_name} ({icao}) \u2013 {PARAMS[param]} '
+                     'Contingency Tables', fontsize=18, weight='bold')
+        fig.tight_layout(rect=[0, 0, 1, 0.99])
+        fname = (f'{PLOTS_DIR}/confusion_plots/{icao}_{param}_confusion'
+                 f'_{TAF_TYPES_FNAME}{unc}.png')
+        fig.savefig(fname)
+        plt.close()
 
 
 def rel_freq_plot(param, stats_dict):
@@ -771,7 +994,8 @@ def rel_freq_plot(param, stats_dict):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/rl_plots/{param}_mean_rel_freqs.png')
+    fig.savefig(f'{PLOTS_DIR}/rl_plots/{param}_mean_rel_freqs_'
+                f'{TAF_TYPES_FNAME}.png')
     plt.close()
 
 
@@ -871,7 +1095,7 @@ def sp_box_plot(stats_dict, param):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
+    fig.savefig(f'{PLOTS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
                 '.png')
     plt.close()
 
@@ -928,7 +1152,7 @@ def g_box_plot(all_stats):
     # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     # Create box plot
     g_box = sns.boxplot(data=plot_stats, x='Parameter', 
@@ -965,7 +1189,7 @@ def g_box_plot(all_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
+    fig.savefig(f'{PLOTS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
     plt.close()
 
     return t_stats

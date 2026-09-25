@@ -8,6 +8,9 @@ import json
 
 # Import environment variables
 D_DIR = os.environ['DATA_DIR']
+# Verification setup (standard / ml); used to keep each setup's output
+# filenames distinct so runs don't overwrite one another
+PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
 T_STRS = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
@@ -86,7 +89,7 @@ NINE_HR_STRS = {
     'EGNR': 'Hawarden', 'EGNV': 'Durham Teeside', 'EGPA': 'Kirkwall', 
     'EGPB': 'Sumburgh', 'EGPC': 'Wick', 'EGPE': 'Inverness', 'EGPI': 'Islay', 
     'EGPN': 'Dundee', 'EGPO': 'Stornoway', 'EGPU': 'Tiree', 'EGSH': 'Norwich',
-    'EGTE': 'Exeter', 'EGTK': 'Oxford'}
+    'EGTE': 'Exeter', 'EGTK': 'Oxford', 'EGHQ': 'Newquay'}
 
 B_TYPES = ['increase', 'decrease', 'both', 'all']
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']

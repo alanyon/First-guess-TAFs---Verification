@@ -1,19 +1,55 @@
 # This script sets up the constants for the verification process.
 
+# Select which set of TAF types to verify. Override before sourcing, e.g.
+#   export VERIF_PROFILE=ml
+# Supported profiles:
+#   standard - Optimistic/Pessimistic auto TAFs vs Manual TAFs (default)
+#   ml       - Auto TAFs before/after machine learning vs Manual TAFs
+export VERIF_PROFILE=${VERIF_PROFILE:-standard}
+
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260123_ml_new
+VER_DATES=20230805-20260805
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
-export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new \
-                  Manual_ml"
-export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
-export COMBS="p2ma o2ma o2p2"
-export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs\n(without ML)",
-                     "p2": "Pessimistic Auto TAFs\n(with ML)",
-                     "o1": "Optimistic Auto TAFs\n(without ML)",
-                     "o2": "Optimistic Auto TAFs\n(with ML)",
-                     "ma": "Manual TAFs"}'
-export PYTHONPATH=~clare.bysouth/VerPy/stable
+
+# Profile-specific TAF types, combinations, plot labels and ML factor.
+# TAF_TYPES        : names of the TAF types (also used for cfg/db/out names)
+# TAF_TYPES_SHORT  : short codes used as keys throughout the code
+# COMBS            : pairwise combinations to compare in scatter plots
+# PLOT_TITLES      : display names (JSON) keyed by short code
+# ML_FACTOR        : addresses ML test data being 0.25 * full dataset
+#                    (set to 1 when the full dataset is used)
+case "${VERIF_PROFILE}" in
+    standard)
+        export TAF_TYPES="opt_all pes_all Manual"
+        export TAF_TYPES_SHORT="op pe ma"
+        export COMBS="opma pema oppe"
+        export PLOT_TITLES='{"op": "Auto TAFs (Optimistic)",
+                             "pe": "Auto TAFs (Pessimistic)",
+                             "ma": "Manual TAFs"}'
+        export ML_FACTOR=1
+        ;;
+    ml)
+        export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new Manual_ml"
+        export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
+        export COMBS="p2ma o2ma o2p2"
+        export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs\n(without ML)",
+                             "p2": "Pessimistic Auto TAFs\n(with ML)",
+                             "o1": "Optimistic Auto TAFs\n(without ML)",
+                             "o2": "Optimistic Auto TAFs\n(with ML)",
+                             "ma": "Manual TAFs"}'
+        export ML_FACTOR=0.25
+        ;;
+    *)
+        echo "Unknown VERIF_PROFILE='${VERIF_PROFILE}'." \
+             "Valid options: standard, ml" >&2
+        exit 1
+        ;;
+esac
+# VerPy plus a local pkg_resources compat shim (compat/) so VerPy imports
+# under scitools os48+ where setuptools no longer ships pkg_resources.
+_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH=~clare.bysouth/VerPy/stable:${_SETUP_DIR}/compat
 export ORACLE_OWNER=oracle
 export ORACLE_BASE=/usr/lib/oracle/23/client64
 export TNS_ADMIN=~andre.lanyon/oracle
@@ -35,10 +71,8 @@ export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK \
                 EGHQ"
 export VERIF_START=20230805
-export VERIF_END=20260123
+export VERIF_END=20260805
 MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
         202406 202407 202408 202409 202410 202411 202412 202501 202502 202503 \
-        202504 202505 202506 202507 202508 202509 202510 202511 202512 202601"
-# Factor to address that in ML work, test data is 0.25 * full dataset 
-# (set to 1 otherwise)
-export ML_FACTOR=0.25
+        202504 202505 202506 202507 202508 202509 202510 202511 202512 202601 \
+        202602 202603 202604 202605 202606 202607 202608"

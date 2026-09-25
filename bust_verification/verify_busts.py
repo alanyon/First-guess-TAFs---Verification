@@ -20,6 +20,7 @@ Functions:
 Written by Andre Lanyon.
 """
 import itertools
+import os
 import sys
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -43,7 +44,7 @@ sns.set(font_scale=1.5)
 def main(load_data):
     """
     Extracts TAFs and METARs and compares them, collecting bust
-    information.
+    information (single-process mode).
 
     Args:
         load_data (str): 'yes' to load from pickled files, 'no' to start
@@ -58,6 +59,19 @@ def main(load_data):
     # Get new data and add to data holders
     get_new_data(holders, load_data)
 
+    # Produce plots from collected data
+    make_plots(holders)
+
+
+def make_plots(holders):
+    """
+    Creates directories and produces all plots from collected bust data.
+
+    Args:
+        holders (dict): Dictionaries of collected bust data
+    Returns:
+        None
+    """
     # Create directories if necessary
     ps.create_dirs()
 
@@ -74,14 +88,14 @@ def main(load_data):
     ps.plot_param(holders, 'wind', summary_stats)
 
     # TESTING #
-    # Keep only total and significant weather bust types
+    # Keep only totals and significant weather bust types
     summary_stats = pd.DataFrame(summary_stats)
     summary_stats = summary_stats[summary_stats['Bust Type'].isin(
         ['Total\nvisibility busts', 'Significant\nweather busts', 
          'Total\ncloud busts', 'Total\nwind busts'])]
 
-    ps.plot_summary_small(summary_stats)
-    ps.plot_wx(holders)
+    ps.plot_summary(summary_stats)
+    # ps.plot_wx(holders)
     ps.plot_taf_lens(holders)
     ps.plot_cats(holders)
 
@@ -434,6 +448,19 @@ def get_holders(load_data):
                 for name in cf.NAMES}
 
     # Otherwise, create empty dictionaries
+    return make_empty_holders()
+
+
+def make_empty_holders():
+    """
+    Creates and returns a fresh set of empty data holder dictionaries.
+
+    Args:
+        None
+    Returns:
+        holders (dict): Empty dictionaries to store data.
+    """
+    # Create empty dictionaries
     wind_template = {icao: [] for icao in cf.REQ_ICAO_STRS}
     wind_info, vis_info, cld_info, wx_info, all_info = (
         deepcopy(wind_template) for _ in range(5)
@@ -523,7 +550,7 @@ def get_icao_metars(all_metars, icao):
 def get_new_data(holders, load_data):
     """
     Extracts TAFs and METARs and compares them, collecting bust
-    information.
+    information (single-process mode, processing all days).
 
     Args:
         holders (dict): Dictionaries to store data
@@ -536,11 +563,30 @@ def get_new_data(holders, load_data):
     if holders['last_day'] == cf.END_DT or load_data == 'no':
         return
 
+    # Process every day in the verification period
+    process_days(holders, cf.DAYS, f'{cf.D_DIR}/pickles')
+
+
+def process_days(holders, days, pickle_dir):
+    """
+    Extracts TAFs and METARs for the given days and compares them,
+    collecting bust information into holders and pickling after each day.
+
+    Args:
+        holders (dict): Dictionaries to store data
+        days (list): List of days (datetime) to process
+        pickle_dir (str): Directory to pickle holders into
+    Returns:
+        None
+    """
+    # Make sure the target pickle directory exists
+    os.makedirs(pickle_dir, exist_ok=True)
+
     # Read in IMPROVER TAFs files
     auto_tafs_lines = [get_taf_lines(fname) for fname in cf.AUTO_TAFS_LINES]
 
-    # Loop though all days in period
-    for day in cf.DAYS:
+    # Loop though all days to process
+    for day in days:
 
         # Print for info of progress
         print(day)
@@ -554,7 +600,6 @@ def get_new_data(holders, load_data):
 
         # Find all IMPROVER TAFs valid on this day
         auto_tafs = [get_day_tafs(day, lines) for lines in auto_tafs_lines]
-
 
         # If no TAFs found, move to next day
         if not all(auto_tafs):
@@ -577,7 +622,112 @@ def get_new_data(holders, load_data):
 
         # Pickle at the end of each day in case something breaks
         for name, data in holders.items():
-            uf.pickle_data(data, f'{cf.D_DIR}/pickles_2/{name}')
+            uf.pickle_data(data, f'{pickle_dir}/{name}')
+
+
+def get_chunk_days(chunk_id, num_chunks):
+    """
+    Returns the subset of verification days assigned to a chunk using
+    round-robin (strided) allocation for even load balancing.
+
+    Args:
+        chunk_id (int): Index of this chunk (0-based)
+        num_chunks (int): Total number of chunks
+    Returns:
+        days (list): Days (datetime) assigned to this chunk
+    """
+    return [day for ind, day in enumerate(cf.DAYS)
+            if ind % num_chunks == chunk_id]
+
+
+def run_worker(chunk_id, num_chunks):
+    """
+    Processes a single chunk of days and pickles the resulting holders
+    into a chunk-specific directory. No plots are produced.
+
+    Args:
+        chunk_id (int): Index of this chunk (0-based)
+        num_chunks (int): Total number of chunks
+    Returns:
+        None
+    """
+    # Start from empty holders for this chunk
+    holders = make_empty_holders()
+
+    # Determine which days this chunk is responsible for
+    days = get_chunk_days(chunk_id, num_chunks)
+
+    # Process the assigned days, pickling into a chunk-specific directory
+    pickle_dir = f'{cf.D_DIR}/pickles/chunk_{chunk_id}'
+    process_days(holders, days, pickle_dir)
+
+
+def merge_value(target, source):
+    """
+    Recursively merges a source holder value into a target value,
+    summing numbers, concatenating lists, taking the latest datetime and
+    merging dictionaries key by key.
+
+    Args:
+        target (obj): Value to merge into
+        source (obj): Value to merge from
+    Returns:
+        obj: Merged value
+    """
+    # Merge dictionaries key by key
+    if isinstance(target, dict):
+        for key, s_val in source.items():
+            if key in target:
+                target[key] = merge_value(target[key], s_val)
+            else:
+                target[key] = deepcopy(s_val)
+        return target
+
+    # Concatenate lists
+    if isinstance(target, list):
+        return target + source
+
+    # Combine booleans (check before int as bool is a subclass of int)
+    if isinstance(target, bool):
+        return target or source
+
+    # Sum numbers
+    if isinstance(target, (int, float)):
+        return target + source
+
+    # Keep the latest day
+    if isinstance(target, datetime):
+        return max(target, source)
+
+    # Fallback: prefer source value
+    return source
+
+
+def run_merge(num_chunks):
+    """
+    Merges the pickled holders from all chunks into a single set of
+    holders, saves them to the main pickle directory and produces plots.
+
+    Args:
+        num_chunks (int): Total number of chunks to merge
+    Returns:
+        None
+    """
+    # Start from empty holders and merge every chunk into them
+    holders = make_empty_holders()
+    for chunk_id in range(num_chunks):
+        pickle_dir = f'{cf.D_DIR}/pickles/chunk_{chunk_id}'
+        chunk = {name: uf.unpickle_data(f'{pickle_dir}/{name}')
+                 for name in cf.NAMES}
+        for name in cf.NAMES:
+            holders[name] = merge_value(holders[name], chunk[name])
+
+    # Save merged holders to main pickle directory for later re-plotting
+    for name, data in holders.items():
+        uf.pickle_data(data, f'{cf.D_DIR}/pickles/{name}')
+
+    # Produce plots from the merged data
+    make_plots(holders)
 
 
 def get_taf_length(taf):
@@ -729,11 +879,19 @@ if __name__ == "__main__":
     # Print time
     time_1 = uf.print_time('started')
 
-    # Get user defined indication for whether new data is needed
-    new_data = sys.argv[1]
+    # First argument selects the mode of operation
+    mode = sys.argv[1]
 
-    # Run main function
-    main(new_data)
+    # Dispatch based on mode
+    if mode == 'worker':
+        # Process a single chunk of days: worker <chunk_id> <num_chunks>
+        run_worker(int(sys.argv[2]), int(sys.argv[3]))
+    elif mode == 'merge':
+        # Merge all chunks and produce plots: merge <num_chunks>
+        run_merge(int(sys.argv[2]))
+    else:
+        # Legacy single-process mode: 'yes' (fresh) or 'no' (re-plot)
+        main(mode)
 
     # Print time
     time_2 = uf.print_time('Finished')

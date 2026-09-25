@@ -16,6 +16,53 @@ import numpy as np
 import sqlalchemy as sql
 import sqlalchemy.ext.declarative as dec
 import sqlalchemy.ext.hybrid as hyb
+from sqlalchemy import event
+
+
+class _LenientDate(sql.TypeDecorator):
+    """A ``DATE`` type that tolerates stored datetime strings.
+
+    The SQLite decode databases declare ``DATE`` columns but store text of
+    the form ``'YYYY-MM-DD HH:MM:SS'``.  SQLAlchemy < 2.0 parsed these
+    leniently, but SQLAlchemy 2.0 (scitools os48+) uses
+    ``datetime.date.fromisoformat`` via the SQLite ``Date`` type, which raises
+    on the trailing time component.  Handling the columns as text and doing
+    the conversion here restores the pre-2.0 behaviour: dates are bound as
+    ``'YYYY-MM-DD'`` (as before) and read back as ``datetime.date``.
+    """
+    impl = sql.String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, (datetime.date, datetime.datetime)):
+            return value.strftime('%Y-%m-%d')
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, datetime.datetime):
+            return value.date()
+        if isinstance(value, datetime.date):
+            return value
+        return datetime.date.fromisoformat(str(value)[:10])
+
+
+
+def _use_lenient_dates(metadata, engine):
+    """Reflect SQLite ``DATE`` columns as :class:`_LenientDate`.
+
+    Only applied to SQLite engines; Oracle returns native date objects and is
+    left untouched.
+    """
+    if engine.dialect.name != 'sqlite':
+        return
+
+    @event.listens_for(metadata, 'column_reflect')
+    def _override(inspector, table, column_info):
+        if isinstance(column_info['type'], sql.Date):
+            column_info['type'] = _LenientDate()
+
 
 
 def extract(args):
@@ -57,7 +104,8 @@ def get_taf_comps(engine, session, args):
     Extract TAF components from the database.
     """
     Base = dec.declarative_base()
-    metadata = sql.MetaData(bind=engine)
+    metadata = sql.MetaData()
+    _use_lenient_dates(metadata, engine)
 
     class TAFComp(Base):
         """
@@ -71,7 +119,7 @@ def get_taf_comps(engine, session, args):
           forecast category (.max_matches)
         """
         istaf = True
-        kwargs = {'autoload':True, 'autoload_with':engine}
+        kwargs = {'autoload_with':engine}
         if args.taf_connection_string.startswith('oracle'):
             kwargs['schema']=args.table_schema
         __table__ = sql.Table(args.taf_table, metadata, **kwargs)
@@ -183,7 +231,8 @@ def get_raw_taf(engine, session, args):
     Extract the raw TAF from the database.
     """
     Base = dec.declarative_base()
-    metadata = sql.MetaData(bind=engine)
+    metadata = sql.MetaData()
+    _use_lenient_dates(metadata, engine)
 
     class RawTAF(Base):
         """
@@ -191,7 +240,7 @@ def get_raw_taf(engine, session, args):
         Aviation Op. Met.
         """
         istaf = True
-        kwargs = {'autoload':True, 'autoload_with':engine}
+        kwargs = {'autoload_with':engine}
         if args.taf_connection_string.startswith('oracle'):
             kwargs['schema']=args.table_schema
         __table__ = sql.Table(args.rawtaf_table, metadata, **kwargs)
@@ -222,7 +271,8 @@ def get_metar_comps(engine, session, args):
     Extract METAR components from the database.
     """
     Base = dec.declarative_base()
-    metadata = sql.MetaData(bind=engine)
+    metadata = sql.MetaData()
+    _use_lenient_dates(metadata, engine)
     class METARComp(Base):
         """
         METAR component class, contains all the components of a METAR:
@@ -232,7 +282,7 @@ def get_metar_comps(engine, session, args):
         """
         istaf = False
         __table__ = sql.Table(args.metar_table, metadata,
-                              schema=args.table_schema, autoload=True,
+                              schema=args.table_schema,
                               autoload_with=engine)
 
         def __str__(self):

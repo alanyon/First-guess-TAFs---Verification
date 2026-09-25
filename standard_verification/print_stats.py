@@ -17,6 +17,11 @@ VERIF_END = os.environ['VERIF_END']
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 
+# Each station writes its stats to its own file in this directory so that
+# parallel station jobs never append to the same CSV simultaneously. The
+# per-station files are combined later by merge_stats.py.
+PER_STATION_DIR = os.path.join(STATS_DIR, 'per_station')
+
 
 def print_ct(con_table):
     '''Pretty print contingency table'''
@@ -78,7 +83,12 @@ def main(param, station, unc):
         'start' : VERIF_START,
         'end'   : VERIF_END}
 
-    subjobs = ver.job.run('.', opts)
+    # Run VerPy in a per-station working directory so that concurrent
+    # station jobs do not clobber each other's VerPy scratch output
+    # (e.g. the Extract_TAFs job folder).
+    work_dir = os.path.join(PER_STATION_DIR, f'verpy_{station}')
+    os.makedirs(work_dir, exist_ok=True)
+    subjobs = ver.job.run(work_dir, opts)
 
     cases = subjobs[0].cases
 
@@ -144,9 +154,11 @@ def main(param, station, unc):
         ct_vals_list = ([station, 'ctvals', taf_type] +
                         [val for val in ct_vals.flatten('F')])
 
-        # Write stats to csv file
-        stats_file = (f'{STATS_DIR}/{param.lower()}_stats_{TAF_TYPES_FNAME}'
-                      f'{unc}.csv')
+        # Write stats to this station's own csv file (combined later by
+        # merge_stats.py). Writing per-station avoids simultaneous appends
+        # to a shared CSV when stations run in parallel.
+        stats_file = (f'{PER_STATION_DIR}/{station}_{param.lower()}_stats_'
+                      f'{TAF_TYPES_FNAME}{unc}.csv')
         open_stats_file = open(stats_file, 'a')
         with open_stats_file:
 
@@ -209,6 +221,17 @@ def convert_to_1vsAll_2x2(dat):
 if __name__ == '__main__':
 
     station = sys.argv[1]
+
+    # Ensure the per-station output directory exists and clear any stale
+    # stats for this station so reruns don't accumulate duplicate rows.
+    os.makedirs(PER_STATION_DIR, exist_ok=True)
+    for _param in ['vis', 'clb']:
+        for _unc in ['', '_unc']:
+            _f = (f'{PER_STATION_DIR}/{station}_{_param}_stats_'
+                  f'{TAF_TYPES_FNAME}{_unc}.csv')
+            if os.path.exists(_f):
+                os.remove(_f)
+
     for param in ['VIS', 'CLB']:
         main(param, station, '')
         # main(param, station, '_unc')

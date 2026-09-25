@@ -12,7 +12,8 @@ def main():
     # Loop through TAF types
     for t_type in TAF_TYPES:
 
-        # Ignore operational file
+        # Ignore manual TAF file (any profile's manual type, e.g. Manual or
+        # Manual_ml); it uses a hand-maintained cfg reading from Oracle
         if 'Manual' in t_type:
             continue
 

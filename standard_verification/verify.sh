@@ -1,16 +1,16 @@
 #!/bin/bash -l
 #SBATCH --partition=cpu-long
-#SBATCH --mem=2G
+#SBATCH --mem=8G
 #SBATCH --ntasks=4
-#SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test2.out
+#SBATCH --output=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test.out
 #SBATCH --time=3000
-#SBATCH --error=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test2.err
+#SBATCH --error=/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/standard_verification/test.err
 
 # Load in constants 
 source setup_constants.sh
 
-# # Activate conda environment
-# module load scitools/production-os46-3
+# Activate conda environment
+module load scitools/production-os48-1
 
 # # Update config files
 # python update_configs.py
