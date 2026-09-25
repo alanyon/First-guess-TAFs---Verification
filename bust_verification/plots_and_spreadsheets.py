@@ -39,15 +39,15 @@ def create_dirs():
         None
     """
     # Make plots directory if needed
-    if not os.path.exists(f'{cf.D_DIR}/plots'):
-        os.makedirs(f'{cf.D_DIR}/plots')
+    if not os.path.exists(f'{cf.D_DIR}/bust_plots'):
+        os.makedirs(f'{cf.D_DIR}/bust_plots')
 
     # Loop through each ICAO
     for icao in cf.REQ_ICAO_STRS:
 
         # Make directory if needed
-        if not os.path.exists(f'{cf.D_DIR}/plots/{icao}'):
-            os.makedirs(f'{cf.D_DIR}/plots/{icao}')
+        if not os.path.exists(f'{cf.D_DIR}/bust_plots/{icao}'):
+            os.makedirs(f'{cf.D_DIR}/bust_plots/{icao}')
 
 
 def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
@@ -225,7 +225,7 @@ def plot_cats(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/cats_covered_all.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/cats_covered_all_{cf.PROFILE}.png')
     plt.close()
 
 
@@ -267,7 +267,7 @@ def plot_dirs(holders):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/plots/{icao}/dir_busts_all.png'
+        img_fname = f'{cf.D_DIR}/bust_plots/{icao}/dir_busts_all_{cf.PROFILE}.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -365,7 +365,7 @@ def plot_param(holders, param, summary_stats):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/plots/{icao}/{param}_busts_all.png'
+        img_fname = f'{cf.D_DIR}/bust_plots/{icao}/{param}_busts_all_{cf.PROFILE}.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -404,7 +404,7 @@ def plot_summary(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_all.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/summary_busts_all_{cf.PROFILE}.png')
     plt.close()
 
 
@@ -444,7 +444,7 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_all.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/taf_lengths_all_{cf.PROFILE}.png')
     plt.close()
 
     # Create figure and axis
@@ -462,7 +462,7 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/taf_lengths_box_all.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/taf_lengths_box_all_{cf.PROFILE}.png')
     plt.close()
 
 
@@ -544,7 +544,7 @@ def plot_wx(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/wx_busts_all.png')
+    fig.savefig(f'{cf.D_DIR}/bust_plots/wx_busts_all_{cf.PROFILE}.png')
     plt.close()
 
 
@@ -597,7 +597,7 @@ def write_to_excel(holders, w_type):
     w_info = holders[f'{w_type}_info']
 
     # Open Excel workbook
-    fname = f'{w_type}_vers.xlsx'
+    fname = f'{w_type}_vers_{cf.PROFILE}.xlsx'
     workbook = xlsxwriter.Workbook(fname)
 
     # Create separate worksheet for each ICAO
@@ -702,7 +702,7 @@ def write_to_excel(holders, w_type):
     workbook.close()
 
     # Copy Excel file to ml_plots directory
-    os.system(f'mv {fname} {cf.D_DIR}/plots')
+    os.system(f'mv {fname} {cf.D_DIR}/bust_plots')
 
 
 def write_stats(worksheet, fmt, stats_dict, msg, key_stat, r_num):

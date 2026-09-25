@@ -56,6 +56,12 @@ PLOT_TITLES = os.environ.get('PLOT_TITLES')
 TAF_TYPES_PLOT = json.loads(PLOT_TITLES)
 ML_FACTOR = float(os.environ['ML_FACTOR'])
 
+# Keep each verification profile's plots in its own directory (e.g.
+# .../stats/plots/standard, .../stats/plots/ml) so standard and ML runs
+# never overwrite one another.
+PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
+PLOTS_DIR = f'{STATS_DIR}/plots/{PROFILE}'
+
 # Define other constants
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
@@ -95,8 +101,8 @@ def main(req_obs, unc):
     # Make directories if needed
     for p_dir in ['rl_plots', 'scatter_plots', 'g_plots', 'sp_plots',
                   'airport_plots', 'confusion_plots']:
-        if not os.path.exists(f'{STATS_DIR}/{p_dir}'):
-            os.makedirs(f'{STATS_DIR}/{p_dir}')
+        if not os.path.exists(f'{PLOTS_DIR}/{p_dir}'):
+            os.makedirs(f'{PLOTS_DIR}/{p_dir}')
 
     # Get dictionary mapping ICAOs to airport names
     icao_dict = get_icao_dict()
@@ -621,7 +627,7 @@ def get_strings(score, param, length, cat, unc, comb):
     # Plot title and fname
     title = f'{PARAMS[param]} {SCORES[score]} Skill Scores{t_extra}'
     imdir = 'scatter_plots'
-    fname = (f'{STATS_DIR}/{imdir}/{param}_{comb}_{score}_scatter'
+    fname = (f'{PLOTS_DIR}/{imdir}/{param}_{comb}_{score}_scatter'
              f'{f_extra}{unc}.png')
 
     return title, fname, key_1, key_2
@@ -702,7 +708,7 @@ def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
         f_extra += f'_{length}hr'
     if cat:
         f_extra += f'_cat_{cat}'
-    fname = (f'{STATS_DIR}/scatter_plots/{comb}_{score}_scatter'
+    fname = (f'{PLOTS_DIR}/scatter_plots/{comb}_{score}_scatter'
              f'{f_extra}{unc}.png')
 
     # Save and close figure
@@ -788,7 +794,8 @@ def airport_plot(all_stats, icao, icao_dict, unc):
 
     # Save and close figure
     fig.tight_layout(rect=[0, 0.03, 1, 0.96])
-    fname = f'{STATS_DIR}/airport_plots/{icao}_scores{unc}.png'
+    fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_{TAF_TYPES_FNAME}'
+             f'{unc}.png')
     fig.savefig(fname, bbox_inches='tight')
     plt.close()
 
@@ -892,8 +899,8 @@ def confusion_plot(all_stats, icao, icao_dict, unc):
         fig.suptitle(f'{airport_name} ({icao}) \u2013 {PARAMS[param]} '
                      'Contingency Tables', fontsize=18, weight='bold')
         fig.tight_layout(rect=[0, 0, 1, 0.99])
-        fname = (f'{STATS_DIR}/confusion_plots/{icao}_{param}_confusion'
-                 f'{unc}.png')
+        fname = (f'{PLOTS_DIR}/confusion_plots/{icao}_{param}_confusion'
+                 f'_{TAF_TYPES_FNAME}{unc}.png')
         fig.savefig(fname)
         plt.close()
 
@@ -987,7 +994,8 @@ def rel_freq_plot(param, stats_dict):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/rl_plots/{param}_mean_rel_freqs.png')
+    fig.savefig(f'{PLOTS_DIR}/rl_plots/{param}_mean_rel_freqs_'
+                f'{TAF_TYPES_FNAME}.png')
     plt.close()
 
 
@@ -1083,7 +1091,7 @@ def sp_box_plot(stats_dict, param):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
+    fig.savefig(f'{PLOTS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
                 '.png')
     plt.close()
 
@@ -1177,7 +1185,7 @@ def g_box_plot(all_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{STATS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
+    fig.savefig(f'{PLOTS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
     plt.close()
 
     return t_stats

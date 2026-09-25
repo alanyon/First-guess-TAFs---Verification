@@ -8,6 +8,9 @@ import json
 
 # Import environment variables
 D_DIR = os.environ['DATA_DIR']
+# Verification setup (standard / ml); used to keep each setup's output
+# filenames distinct so runs don't overwrite one another
+PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
 T_STRS = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
@@ -17,7 +20,7 @@ TAF_TYPES = json.loads(PLOT_TITLES)
 # Accepted first guess TAFs
 AUTO_TAFS_LINES = []
 for t_str in T_STRS:
-    if t_str == 'Manual':
+    if 'Manual' in t_str:
         continue
     AUTO_TAFS_LINES.append(f'{D_DIR}/decodes/Output_{t_str}/acceptedTafs.csv')
 

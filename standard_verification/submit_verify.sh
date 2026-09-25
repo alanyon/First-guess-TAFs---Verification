@@ -31,10 +31,12 @@ for taf_type in ${TAF_TYPES}; do
     mkdir -p "${DATA_DIR}/${taf_type}"
 done
 
-# Start each run from a clean slate for the stats CSVs so reruns don't
-# accumulate duplicate rows.
-rm -f "${STATS_DIR}/per_station/"*.csv
-rm -f "${STATS_DIR}/"*_stats_*.csv
+# Start each run from a clean slate for THIS profile's stats CSVs so reruns
+# don't accumulate duplicate rows. Scoped to the current profile's filename
+# token (e.g. op_pe_ma / p1_p2_o1_o2_ma) so the other setup's stats survive.
+fname=$(echo ${TAF_TYPES_SHORT} | tr ' ' '_')
+rm -f "${STATS_DIR}/per_station/"*_stats_${fname}*.csv
+rm -f "${STATS_DIR}/"*_stats_${fname}*.csv
 
 # Number of stations -> array size (indices 0..last)
 nstations=$(echo ${ALL_TAFS} | wc -w)
