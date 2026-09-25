@@ -53,15 +53,13 @@ for month in ${MONTHS}; do
         outfile=${outdir}/${icao}_${month}.out
         visfile=${outdir}/${icao}_${month}_vis.nc
         clbfile=${outdir}/${icao}_${month}_clb.nc
-        uncvisfile=${outdir}/${icao}_${month}_vis_unc.nc
-        uncclbfile=${outdir}/${icao}_${month}_clb_unc.nc
         configfile=${taf_type}.cfg
         # Remove stale NetCDF from previous runs (VerPy writes with
         # overwrite=False, so leftover files would cause problems on reruns)
-        rm -f "${visfile}" "${clbfile}" "${uncvisfile}" "${uncclbfile}"
+        rm -f "${visfile}" "${clbfile}"
         date > "${outfile}"
         python driver.py "${start}" "${end}" "${icao}" "${duration}" \
-            "${visfile}" "${clbfile}" "${uncvisfile}" "${uncclbfile}" \
+            "${visfile}" "${clbfile}" \
             "${configfile}" >> "${outfile}"
         date >> "${outfile}"
     done

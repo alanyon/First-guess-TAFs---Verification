@@ -29,19 +29,22 @@ from TAFDecode_env import *
 #-----------------------------------------------------------------------------
 # Driver
 #-----------------------------------------------------------------------------
-def main():
+def main(inputDir=None, outputDir=None):
   '''main() is driver of this script and is called
-  automatically when the script is read interactively.'''
+  automatically when the script is read interactively.
+
+  The input and output directories can be passed in directly (e.g. when
+  called from another script) or, if omitted, are read from the command
+  line arguments (-i/-o).'''
  
-  # Read arguments to determine input and output directories
-  inputDir=outputDir=None
- 
-  opts,args = getopt.getopt(sys.argv[1:], "i:o:")
-  for o,v in opts:
-    if o == '-i':
-        inputDir=v
-    if o == '-o':
-        outputDir=v
+  # Read arguments from the command line only if not passed in directly
+  if inputDir is None and outputDir is None:
+    opts,args = getopt.getopt(sys.argv[1:], "i:o:")
+    for o,v in opts:
+      if o == '-i':
+          inputDir=v
+      if o == '-o':
+          outputDir=v
  
   # Give defaults if not passed as arguments
   if inputDir is None:

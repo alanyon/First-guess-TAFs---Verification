@@ -52,11 +52,9 @@ module load scitools/production-os48-1
 #       outfile=${outdir}/${icao}_${month}.out
 #       visfile=${outdir}/${icao}_${month}_vis.nc
 #       clbfile=${outdir}/${icao}_${month}_clb.nc
-#       uncvisfile=${outdir}/${icao}_${month}_vis_unc.nc
-#       uncclbfile=${outdir}/${icao}_${month}_clb_unc.nc
 #       configfile=${taf_type}.cfg
 #       date >  $outfile
-#       python driver.py ${start} ${end} ${icao} ${duration} ${visfile} ${clbfile} ${uncvisfile} ${uncclbfile} ${configfile} >> $outfile
+#       python driver.py ${start} ${end} ${icao} ${duration} ${visfile} ${clbfile} ${configfile} >> $outfile
 #       date >>  $outfile
 #     done
 #   done

@@ -5,22 +5,25 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd
 import VerPy as ver
 import xarray
 
-# Environment constants
-STATS_DIR = os.environ['STATS_DIR']
+# Environment constants. STATS_DIR/VERIF_START/VERIF_END are only needed by
+# the standard (per-station) workflow; the rolling workflow imports this
+# module for calc_scores() without setting them, so read them leniently.
+STATS_DIR = os.environ.get('STATS_DIR')
 DATA_DIR = os.environ['DATA_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
-VERIF_START = os.environ['VERIF_START']
-VERIF_END = os.environ['VERIF_END']
+VERIF_START = os.environ.get('VERIF_START')
+VERIF_END = os.environ.get('VERIF_END')
 TAF_TYPES_SHORT = os.environ['TAF_TYPES_SHORT'].split()
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 
 # Each station writes its stats to its own file in this directory so that
 # parallel station jobs never append to the same CSV simultaneously. The
 # per-station files are combined later by merge_stats.py.
-PER_STATION_DIR = os.path.join(STATS_DIR, 'per_station')
+PER_STATION_DIR = os.path.join(STATS_DIR, 'per_station') if STATS_DIR else None
 
 
 def print_ct(con_table):
@@ -56,19 +59,17 @@ def print_ct(con_table):
 
     return fcs_freqs, obs_freqs
 
-def main(param, station, unc):
+def main(param, station):
     '''Extract data, equalize and mean before printing'''
 
     # Concatenate monthly files together
     source_list = []
     for taf_type in TAF_TYPES:
         datadir = f'{DATA_DIR}/{taf_type}'
-        source = os.path.join(datadir, '{}_*_{}{}.nc'.format(station,
-                                                             param.lower(),
-                                                             unc))
+        source = os.path.join(datadir, '{}_*_{}.nc'.format(station,
+                                                           param.lower()))
         new_source = os.path.join(datadir, '{}_{}.nc'.format(station,
-                                                             param.lower(),
-                                                             unc))
+                                                            param.lower()))
 
         dsr = xarray.open_mfdataset(source)
         dsr.to_netcdf(new_source)
@@ -158,7 +159,7 @@ def main(param, station, unc):
         # merge_stats.py). Writing per-station avoids simultaneous appends
         # to a shared CSV when stations run in parallel.
         stats_file = (f'{PER_STATION_DIR}/{station}_{param.lower()}_stats_'
-                      f'{TAF_TYPES_FNAME}{unc}.csv')
+                      f'{TAF_TYPES_FNAME}.csv')
         open_stats_file = open(stats_file, 'a')
         with open_stats_file:
 
@@ -218,6 +219,104 @@ def convert_to_1vsAll_2x2(dat):
     return dat
 
 
+def calc_scores(param, station, start, end):
+    '''Extract data, equalize and mean, then return the Gerrity and Peirce
+    scores and contingency tables for each TAF type.
+
+    Unlike main(), this function does not print or write CSV files; it
+    returns the results so callers (e.g. the rolling workflow) can use them
+    directly.
+
+    Args:
+        param (str): parameter name ('vis' or 'clb', lowercase)
+        station (str): station ICAO
+        start (str): start date (YYYYMMDD)
+        end (str): end date (YYYYMMDD)
+    Returns:
+        gerrity_scores (dict): Gerrity skill score keyed by TAF type
+        peirce_scores (dict): per-category Peirce scores keyed by TAF type
+        cts (dict): contingency table DataFrame keyed by TAF type
+    '''
+    # Concatenate files together
+    source_list = []
+    for taf_type in TAF_TYPES:
+        datadir = f'{DATA_DIR}/{taf_type}'
+        source = os.path.join(datadir, '{}_*_{}.nc'.format(station, param))
+        new_source = os.path.join(datadir, '{}_{}.nc'.format(station, param))
+
+        dsr = xarray.open_mfdataset(source)
+        dsr.to_netcdf(new_source)
+        source_list.append(new_source)
+
+    opts = {
+        'jobid' : 'Extract_TAFs',
+        'expids': 'MO-TAFs',
+        'type'  : 'netcdf',
+        'truth' : 10000,
+        'source': source_list,
+        'start' : start,
+        'end'   : end}
+
+    subjobs = ver.job.run('.', opts)
+
+    cases = subjobs[0].cases
+
+    # Fill in missing TAFs with NaNs
+    for case in cases:
+        dts = ver.dt.get_all_datetimes(ver.dt.Datetime(start),
+                                       ver.dt.Datetime(end),
+                                       range(0, 2400, 100))
+        if not np.all(dts == case.data.dates):
+            # Find missing datetimes
+            old_dts = case.data.dates
+            axis = case.data.get_val_axis('dates')
+            for i, d in enumerate(dts):
+                if d not in old_dts:
+                    case.data.vals = np.insert(case.data.vals, i, np.nan, axis)
+            # Update the instance's dates
+            case.data.dates = dts
+
+    # Equalize
+    cases = ver.data.equalize(cases)
+
+    gerrity_scores = {}
+    peirce_scores = {}
+    cts = {}
+
+    for case, taf_type in zip(cases, TAF_TYPES):
+
+        # Mean over all dates
+        case.data.mean_all_dates()
+
+        # Save contingency table values for plotting
+        ct_vals = np.squeeze(case.data.vals)
+
+        # Convert to DataFrame
+        cats = ct_vals.shape[0]
+        df_ct = pd.DataFrame(ct_vals,
+                             index=[f'FC_cat_{i+1}' for i in range(cats)],
+                             columns=[f'OB_cat_{i+1}' for i in range(cats)])
+        cts[taf_type] = df_ct
+
+        # Calculate Gerrity, Peirce and Accuracy
+        req_stats = [ver.stats.get_statistic(stat) for stat in [7987, 7988]]
+
+        cat_stats = ver.stats.derived.calc_stats(case.data, req_stats)
+
+        big_peirce, gerrity = list(cat_stats.vals.flatten())
+
+        # Get Peirce skill scores for each category
+        case.data = convert_to_1vsAll_2x2(case.data)
+        req_stats = [ver.stats.get_statistic(7908)]
+        peirce = ver.stats.derived.calc_stats(case.data, req_stats)
+        peirce_vals = list(peirce.vals.flatten())
+
+        gerrity_scores[taf_type] = gerrity
+        peirce_scores[taf_type] = peirce_vals
+
+    return gerrity_scores, peirce_scores, cts
+
+
 if __name__ == '__main__':
 
     station = sys.argv[1]
@@ -226,12 +325,10 @@ if __name__ == '__main__':
     # stats for this station so reruns don't accumulate duplicate rows.
     os.makedirs(PER_STATION_DIR, exist_ok=True)
     for _param in ['vis', 'clb']:
-        for _unc in ['', '_unc']:
-            _f = (f'{PER_STATION_DIR}/{station}_{_param}_stats_'
-                  f'{TAF_TYPES_FNAME}{_unc}.csv')
-            if os.path.exists(_f):
-                os.remove(_f)
+        _f = (f'{PER_STATION_DIR}/{station}_{_param}_stats_'
+              f'{TAF_TYPES_FNAME}.csv')
+        if os.path.exists(_f):
+            os.remove(_f)
 
     for param in ['VIS', 'CLB']:
-        main(param, station, '')
-        # main(param, station, '_unc')
+        main(param, station)

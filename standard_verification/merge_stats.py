@@ -16,14 +16,14 @@ TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
 PER_STATION_DIR = os.path.join(STATS_DIR, 'per_station')
 
 
-def merge(param, unc=''):
+def merge(param):
     '''Concatenate all per-station CSVs for a parameter into one file.'''
     pattern = os.path.join(
-        PER_STATION_DIR, f'*_{param}_stats_{TAF_TYPES_FNAME}{unc}.csv')
+        PER_STATION_DIR, f'*_{param}_stats_{TAF_TYPES_FNAME}.csv')
     files = sorted(glob.glob(pattern))
 
     out_file = os.path.join(
-        STATS_DIR, f'{param}_stats_{TAF_TYPES_FNAME}{unc}.csv')
+        STATS_DIR, f'{param}_stats_{TAF_TYPES_FNAME}.csv')
 
     # Open in write mode to overwrite any file from a previous run.
     with open(out_file, 'w', encoding='utf-8') as out:
@@ -36,5 +36,4 @@ def merge(param, unc=''):
 
 if __name__ == '__main__':
     for param in ['vis', 'clb']:
-        merge(param, '')
-        # merge(param, '_unc')
+        merge(param)

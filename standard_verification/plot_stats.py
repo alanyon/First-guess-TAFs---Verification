@@ -88,7 +88,7 @@ MARKERS = ['o', 'v', 'P', 'X', 's', 'p', '*', 'D']
 SIZES = [50, 50, 60, 50, 50, 60, 80, 40]
 
 
-def main(req_obs, unc):
+def main(req_obs):
     """
     Creates plots comparing verification scores from manually produced
     TAFs to those of first guess TAFs
@@ -96,7 +96,6 @@ def main(req_obs, unc):
     Args:
         req_obs (list): List of required number of observations for each
                         TAF length
-        unc (str): String to add to filenames if uncertainty is included
     """
     # Make directories if needed
     for p_dir in ['rl_plots', 'scatter_plots', 'g_plots', 'sp_plots',
@@ -117,7 +116,7 @@ def main(req_obs, unc):
     for param in PARAMS:
 
         # Empty lists to append stats to
-        stats_dict = get_stats(param, unc, req_obs)
+        stats_dict = get_stats(param, req_obs)
 
         sp_box_plot(stats_dict, param)
 
@@ -130,7 +129,7 @@ def main(req_obs, unc):
     for comb in COMBS:
 
         # Scatter plots showing Gerrity scores for all airports
-        make_plot(color_dict, all_stats, 'g', unc, comb, icao_dict)
+        make_plot(color_dict, all_stats, 'g', comb, icao_dict)
 
     # Create Gerrity score box plots
     g_box_plot(all_stats)
@@ -138,8 +137,8 @@ def main(req_obs, unc):
     # One summary figure per airport (Gerrity and Peirce skill scores for
     # visibility and cloud base, comparing all TAF types)
     for icao in sorted(set(all_stats['vis']) & set(all_stats['clb'])):
-        airport_plot(all_stats, icao, icao_dict, unc)
-        confusion_plot(all_stats, icao, icao_dict, unc)
+        airport_plot(all_stats, icao, icao_dict)
+        confusion_plot(all_stats, icao, icao_dict)
 
 
 def add_big_peirce(stats_dict, row, f_key):
@@ -505,18 +504,17 @@ def get_icao_dict():
     return icao_dict
 
 
-def get_stats(param, unc, req_obs):
+def get_stats(param, req_obs):
     """
     Collects stats from a csv file.
 
     Args:
         param (str): Parameter to verify
-        unc (str): String to add to filenames if uncertainty is included
         req_obs (list): List of required number of observations for each
                         TAF length
     """
     # Define stats file
-    stats_file = f'{STATS_DIR}/{param}_stats_{TAF_TYPES_FNAME}{unc}.csv'
+    stats_file = f'{STATS_DIR}/{param}_stats_{TAF_TYPES_FNAME}.csv'
 
 
     # Dictionary to add stats to
@@ -586,7 +584,7 @@ def get_stats(param, unc, req_obs):
     return stats_dict
 
 
-def get_strings(score, param, length, cat, unc, comb):
+def get_strings(score, param, length, cat, comb):
     """
     Determines strings to use for plot titles and fnames, as well as
     keys to use for extracting data from stats dictionary.
@@ -596,7 +594,6 @@ def get_strings(score, param, length, cat, unc, comb):
         param (str): Parameter to verify
         length (int): Length of TAFs to plot
         cat (int): Category of TAFs to plot
-        unc (str): String to add to filenames if uncertainty is included
         comb (str): Combination of TAF types to plot
     Returns:
         title (str): Title for plot
@@ -617,8 +614,6 @@ def get_strings(score, param, length, cat, unc, comb):
         else:
             t_extra += '\nMean of all categories'
         f_extra += f'_cat_{cat}'
-    if unc:
-        t_extra += ' (uncertainty)'
 
     # keys to use for extracting info from stats dictionary
     key_1 = f'{score}_{comb[:2]}{k_extra}'
@@ -628,12 +623,12 @@ def get_strings(score, param, length, cat, unc, comb):
     title = f'{PARAMS[param]} {SCORES[score]} Skill Scores{t_extra}'
     imdir = 'scatter_plots'
     fname = (f'{PLOTS_DIR}/{imdir}/{param}_{comb}_{score}_scatter'
-             f'{f_extra}{unc}.png')
+             f'{f_extra}.png')
 
     return title, fname, key_1, key_2
 
 
-def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
+def make_plot(color_dict, all_stats, score, comb, icao_dict,
               length='', cat=''):
     """
     Creates a combined scatter plot with visibility and cloud base shown
@@ -643,7 +638,6 @@ def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
         color_dict (dict): Dictionary of colours to use for each airport
         all_stats (dict): Dictionary of stats keyed by parameter
         score (str): Score to plot
-        unc (str): String to add to filenames if uncertainty is included
         comb (str): Combination of TAF types to plot
         icao_dict (dict): Dictionary mapping ICAO codes to airport names
         length (int): Length of TAFs to plot
@@ -659,7 +653,7 @@ def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
         stats_dict = all_stats[param]
 
         # Define title and keys for extracting data from stats dict
-        title, _, key_1, key_2 = get_strings(score, param, length, cat, unc,
+        title, _, key_1, key_2 = get_strings(score, param, length, cat,
                                               comb)
 
         # Extract data from stats dictionary
@@ -709,7 +703,7 @@ def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
     if cat:
         f_extra += f'_cat_{cat}'
     fname = (f'{PLOTS_DIR}/scatter_plots/{comb}_{score}_scatter'
-             f'{f_extra}{unc}.png')
+             f'{f_extra}.png')
 
     # Save and close figure
     fig.tight_layout()
@@ -717,7 +711,7 @@ def make_plot(color_dict, all_stats, score, unc, comb, icao_dict,
     plt.close()
 
 
-def airport_plot(all_stats, icao, icao_dict, unc):
+def airport_plot(all_stats, icao, icao_dict):
     """
     Creates a single summary figure for one airport.
 
@@ -730,7 +724,6 @@ def airport_plot(all_stats, icao, icao_dict, unc):
         all_stats (dict): Dictionary of stats keyed by parameter
         icao (str): ICAO code of the airport to plot
         icao_dict (dict): Dictionary mapping ICAO codes to airport names
-        unc (str): String to add to filenames if uncertainty is included
     Returns:
         None
     """
@@ -794,13 +787,13 @@ def airport_plot(all_stats, icao, icao_dict, unc):
 
     # Save and close figure
     fig.tight_layout(rect=[0, 0.03, 1, 0.96])
-    fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_{TAF_TYPES_FNAME}'
-             f'{unc}.png')
+    fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_'
+             f'{TAF_TYPES_FNAME}.png')
     fig.savefig(fname, bbox_inches='tight')
     plt.close()
 
 
-def confusion_plot(all_stats, icao, icao_dict, unc):
+def confusion_plot(all_stats, icao, icao_dict):
     """
     Creates contingency-table (confusion-matrix) heatmaps for one airport.
 
@@ -814,7 +807,6 @@ def confusion_plot(all_stats, icao, icao_dict, unc):
         all_stats (dict): Dictionary of stats keyed by parameter
         icao (str): ICAO code of the airport to plot
         icao_dict (dict): Dictionary mapping ICAO codes to airport names
-        unc (str): String to add to filenames if uncertainty is included
     Returns:
         None
     """
@@ -900,7 +892,7 @@ def confusion_plot(all_stats, icao, icao_dict, unc):
                      'Contingency Tables', fontsize=18, weight='bold')
         fig.tight_layout(rect=[0, 0, 1, 0.99])
         fname = (f'{PLOTS_DIR}/confusion_plots/{icao}_{param}_confusion'
-                 f'_{TAF_TYPES_FNAME}{unc}.png')
+                 f'_{TAF_TYPES_FNAME}.png')
         fig.savefig(fname)
         plt.close()
 
@@ -1200,8 +1192,6 @@ if __name__ == '__main__':
     # Get min number of matched required to ensure enough data for verification
     min_obs = calc_min_obs(START, END)
 
-    # Run for normal scores and uncertainty-penalising scores
-    main(min_obs, '')
-    # main(min_obs, '_unc')
+    main(min_obs)
 
     print('Finished')
