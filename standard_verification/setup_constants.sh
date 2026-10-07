@@ -9,7 +9,7 @@
 export VERIF_PROFILE=${VERIF_PROFILE:-standard}
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260805
+VER_DATES=20230805-20260805_test
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
 
@@ -22,11 +22,17 @@ export DECODE_DIR=${DATA_DIR}/decodes
 #                    (set to 1 when the full dataset is used)
 case "${VERIF_PROFILE}" in
     standard)
-        export TAF_TYPES="opt_all pes_all Manual"
-        export TAF_TYPES_SHORT="op pe ma"
-        export COMBS="opma pema oppe"
-        export PLOT_TITLES='{"op": "Auto TAFs (Optimistic)",
-                             "pe": "Auto TAFs (Pessimistic)",
+        export TAF_TYPES="no_p30_40_opt_all no_p20_30_opt_all \
+                          no_p10_20_opt_all no_p30_40_pes_all \
+                          no_p20_30_pes_all no_p10_20_pes_all Manual"
+        export TAF_TYPES_SHORT="o1 o2 o3 p1 p2 p3 ma"
+        export COMBS="o1o3 p1p3 p3o3 p3ma o3ma"
+        export PLOT_TITLES='{"o1": "Optimistic Auto TAFs\n(30th/40th percentiles)",
+                             "o2": "Optimistic Auto TAFs\n(20th/30th percentiles)",
+                             "o3": "Optimistic Auto TAFs\n(10th/20th percentiles)",
+                             "p1": "Pessimistic Auto TAFs\n(30th/40th percentiles)",
+                             "p2": "Pessimistic Auto TAFs\n(20th/30th percentiles)",
+                             "p3": "Pessimistic Auto TAFs\n(10th/20th percentiles)",
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=1
         ;;
@@ -34,10 +40,10 @@ case "${VERIF_PROFILE}" in
         export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new Manual_ml"
         export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
         export COMBS="p2ma o2ma o2p2"
-        export PLOT_TITLES='{"p1": "Pessimistic Auto TAFs\n(without ML)",
-                             "p2": "Pessimistic Auto TAFs\n(with ML)",
-                             "o1": "Optimistic Auto TAFs\n(without ML)",
+        export PLOT_TITLES='{"o1": "Optimistic Auto TAFs\n(without ML)",
                              "o2": "Optimistic Auto TAFs\n(with ML)",
+                             "p1": "Pessimistic Auto TAFs\n(without ML)",
+                             "p2": "Pessimistic Auto TAFs\n(with ML)",
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=0.25
         ;;
@@ -81,8 +87,5 @@ export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK \
                 EGHQ"
 export VERIF_START=20230805
-export VERIF_END=20260805
-MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
-        202406 202407 202408 202409 202410 202411 202412 202501 202502 202503 \
-        202504 202505 202506 202507 202508 202509 202510 202511 202512 202601 \
-        202602 202603 202604 202605 202606 202607 202608"
+export VERIF_END=20240605
+MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405"

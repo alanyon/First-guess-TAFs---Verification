@@ -20,4 +20,5 @@ conda activate default_clone_may_2026
 export PYTHONPATH=$PYTHONPATH:~andre.lanyon/python
 export PYTHONPATH=$PYTHONPATH:/home/users/andre.lanyon/first_guess_tafs/First-guess-TAFs---Verification/taf_monitor
 
-python verify_busts.py worker "${SLURM_ARRAY_TASK_ID}" "${NUM_CHUNKS}"
+# -u keeps stdout unbuffered so per-day progress appears in the log live
+python -u verify_busts.py worker "${SLURM_ARRAY_TASK_ID}" "${NUM_CHUNKS}"

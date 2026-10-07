@@ -83,7 +83,7 @@ def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
             elif 'visibility'in msg:
                 colour = 'orange'
             elif 'weather' in msg:
-                colour = 'gold'
+                colour = '#FFD700'
             elif 'cloud' in msg:
                 colour = 'green'
         elif 'visibility' in msg:
@@ -95,7 +95,7 @@ def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
                 colour = 'blue'
         elif 'weather' in msg:
             if msg == 'weather':
-                colour = 'blueviolet'
+                colour = '#8A2BE2'
             elif 'cloud' in msg:
                 colour = 'magenta'
         elif 'cloud' in msg:
@@ -153,7 +153,7 @@ def mets_wind(ver_lst, worksheet, workbook, m_row_num, col):
                 colour = 'green'
                 msg = 'Decrease/dir - '
             else:
-                colour = 'gold'
+                colour = '#FFD700'
                 msg = 'Decrease - '
         elif bust_types['dir']:
             colour = 'blue'

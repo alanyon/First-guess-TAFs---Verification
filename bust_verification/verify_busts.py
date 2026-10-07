@@ -40,6 +40,10 @@ import plots_and_spreadsheets as ps
 sns.set_style('darkgrid')
 sns.set(font_scale=1.5)
 
+# Cap MetDB RPC calls; the library default is 5400s, so a stalled retrieval
+# would otherwise block a worker for up to 90 minutes per call
+RETRIEVE_TIMEOUT = 300
+
 
 def main(load_data):
     """
@@ -353,14 +357,16 @@ def get_day_man_tafs_metars(day):
                          keywords=['PLATFORM EG',
                                    f'START TIME {start_times[0]}Z',
                                    f'END TIME {end_times[0]}Z'],
-                         elements=['ICAO_ID', 'TAF_RPT_TXT'])
+                         elements=['ICAO_ID', 'TAF_RPT_TXT'],
+                         timeout=RETRIEVE_TIMEOUT)
 
     # Get METARs for all possible times TAFs cover (3 days)
     all_metars = [metdb.obs(cf.METDB_EMAIL, 'METARS',
                             keywords=['PLATFORM EG',
                                       f'START TIME {start_time}Z',
                                       f'END TIME {end_time}Z'],
-                            elements=['ICAO_ID', 'MTR_RPT_TXT'])
+                            elements=['ICAO_ID', 'MTR_RPT_TXT'],
+                            timeout=RETRIEVE_TIMEOUT)
                   for start_time, end_time in zip(start_times, end_times)]
 
     # Get SPECIs for all possible times TAFs cover
@@ -368,7 +374,8 @@ def get_day_man_tafs_metars(day):
                             keywords=['PLATFORM EG',
                                       f'START TIME {start_time}Z',
                                       f'END TIME {end_time}Z'],
-                            elements=['ICAO_ID', 'MTR_RPT_TXT'])
+                            elements=['ICAO_ID', 'MTR_RPT_TXT'],
+                            timeout=RETRIEVE_TIMEOUT)
                   for start_time, end_time in zip(start_times, end_times)]
 
     # Get TAFs/METARs for each required ICAO and store in dictionaries
@@ -838,10 +845,6 @@ def update_infos(holders, icao, vc_tafs, vc_busts):
         
 
         holders[f'{w_type}_info'][icao].append(w_info)
-
-        # w_info = sum([[taf, busts[w_lng]]
-        #               for taf, busts in zip(all_tafs, all_busts)], [])
-        # holders[f'{w_type}_info'][icao].append(w_info)
 
 
 def update_stats(holders, vc_busts, vc_cats, icao):
