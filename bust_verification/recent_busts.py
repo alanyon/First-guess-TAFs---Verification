@@ -20,6 +20,7 @@ Functions:
 
 Written by Andre Lanyon.
 """
+import csv
 import itertools
 import os
 import pickle
@@ -41,6 +42,32 @@ METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
 TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
                 'First-guess-TAFs---Verification/standard_verification/'
                 'taf_info.csv')
+
+
+def _load_taf_freqs(path):
+    """
+    Loads TAF issue frequencies (hours between successive TAFs) keyed by
+    (icao, taf_len). A TAF is only the valid/current forecast for taf_freq
+    hours after issue, after which a newer TAF supersedes it. The same
+    ICAO can issue multiple products of differing lengths/frequencies, so
+    the forecast length is part of the key.
+    """
+    freqs = {}
+    with open(path, newline='') as csv_file:
+        for row in csv.DictReader(csv_file):
+            try:
+                icao = row['icao'].strip()
+                taf_len = int(row['taf_len'])
+                taf_freq = int(row['taf_freq'])
+            except (KeyError, ValueError, AttributeError):
+                continue
+            freqs[(icao, taf_len)] = taf_freq
+    return freqs
+
+
+# Lookup used to limit bust checking to each TAF's valid (most recently
+# issued) window
+TAF_FREQS = _load_taf_freqs(TAF_INFO_CSV)
 TAF_TYPES = {
     'auto_opt': 'Optimistic Auto TAFs (no ML)',
     'auto_opt_up_1': 'Optimistic Auto TAFs (no ML) - Obs Update 1',
@@ -251,19 +278,29 @@ def get_icao_metars(all_metars, all_specis, icao, taf_start_dt, icao_tafs):
     Returns:
         metars (list): List of METARs for specified ICAO (or None)
         start (datetime): Start datetime for TAFs
-        end (datetime): End datetime for TAFs
+        valid_end (datetime): End of the TAF's valid window
     """
     # Get TAF start and end times
     month, year = taf_start_dt.month, taf_start_dt.year
     man_time = icao_tafs['man'][2]
     start, end = ConstructTimeObject(man_time, int(man_time[:2]),
                                      month, year).TAF()
-    # Get METARs and SPECIs for ICAO
-    icao_metars = get_metars(all_metars, icao, start, end)
-    icao_specis = get_metars(all_specis, icao, start, end)
+
+    # Limit checking to the window in which this TAF is still the most
+    # recently issued (valid) forecast. A newer TAF is issued every
+    # taf_freq hours and supersedes this one, so busts can only occur
+    # within the first taf_freq hours of its period.
+    valid_end = get_valid_end(icao, start, end)
+
+    # Get METARs and SPECIs for ICAO, limited to the TAF's valid window.
+    # A METAR at exactly valid_end belongs to the superseding TAF, so
+    # exclude it when the window has been truncated.
+    inclusive_end = valid_end == end
+    icao_metars = get_metars(all_metars, icao, start, valid_end, inclusive_end)
+    icao_specis = get_metars(all_specis, icao, start, valid_end, inclusive_end)
 
     if not icao_metars and not icao_specis:
-        return None, start, end
+        return None, start, valid_end
 
     # Combine SPECIs and METARs
     icao_metars.update(icao_specis)
@@ -390,7 +427,7 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2,
     return None
 
 
-def get_metars(all_metars, icao, start, end):
+def get_metars(all_metars, icao, start, end, inclusive_end=True):
     """
     Returns dictionary of METARs or SPECIs for specified ICAO.
 
@@ -399,6 +436,9 @@ def get_metars(all_metars, icao, start, end):
         icao (str): ICAO to check METARs for
         start (datetime): Start datetime for TAFs
         end (datetime): End datetime for TAFs
+        inclusive_end (bool): Whether end itself is included. Should be
+            False when end is a truncated TAF validity window, since a
+            METAR at that exact time belongs to the superseding TAF.
     Returns:
         icao_metars (dict): Dictionary of METARs for specified ICAO
     """
@@ -433,10 +473,44 @@ def get_metars(all_metars, icao, start, end):
         # Get METAR validity datetime and add to dictionary if in period
         m_dt = ' '.join(metar_list[:2])
         metar_vdt = datetime.strptime(m_dt, '%H%MZ %d/%m/%y')
-        if start <= metar_vdt <= end:
+        in_window = (start <= metar_vdt <= end if inclusive_end
+                    else start <= metar_vdt < end)
+        if in_window:
             icao_metars[metar_vdt] = metar_comps
 
     return icao_metars
+
+
+def get_valid_end(icao, start, end):
+    """
+    Returns the time until which a TAF is the most recently issued (valid)
+    forecast.
+
+    A new TAF is issued every taf_freq hours (from taf_info.csv) and
+    supersedes the previous one, so a TAF can only be verified against
+    METARs within the first taf_freq hours of its forecast period. If the
+    frequency is unknown, the full TAF period is used.
+
+    Args:
+        icao (str): ICAO of TAF
+        start (datetime): Start time of TAF
+        end (datetime): End time of TAF
+    Returns:
+        valid_end (datetime): End of the TAF's valid window
+    """
+    # TAF forecast length in hours (end can be xx:59 for 24Z groups, so
+    # round to the nearest hour)
+    taf_len = int(round((end - start).total_seconds() / 3600))
+
+    # Issue frequency for this ICAO and TAF length
+    taf_freq = TAF_FREQS.get((icao, taf_len))
+
+    # Without a known frequency, fall back to the full TAF period
+    if taf_freq is None:
+        return end
+
+    # The TAF is superseded after taf_freq hours
+    return min(end, start + timedelta(hours=taf_freq))
 
 
 def get_tafs_metars():
@@ -511,20 +585,22 @@ def mets_all(ver_lst, worksheet, workbook, m_row_num, col, type_workbook_lst):
         # Join ypes of bust together
         msg = ' and '.join(bust_types)
 
-        # Colour METAR based on bust type using a mapping approach
+        # Colour METAR based on bust type using a mapping approach.
+        # xlsxwriter only recognises a small set of named colours, so use
+        # hex codes to support the full palette reliably.
         colour_map = {
-            'wind': 'red',
-            'wind and visibility': 'orange',
-            'wind and weather': 'gold',
-            'wind and cloud': 'green',
-            'visibility': 'lime',
-            'visibility and weather': 'cyan',
-            'visibility and cloud': 'blue',
-            'weather': 'blueviolet',
-            'weather and cloud': 'magenta',
-            'cloud': 'purple'
+            'wind': '#FF0000',
+            'wind and visibility': '#FFA500',
+            'wind and weather': '#FFD700',
+            'wind and cloud': '#008000',
+            'visibility': '#00FF00',
+            'visibility and weather': '#00FFFF',
+            'visibility and cloud': '#0000FF',
+            'weather': '#8A2BE2',
+            'weather and cloud': '#FF00FF',
+            'cloud': '#800080'
         }
-        colour = colour_map.get(msg, 'black')
+        colour = colour_map.get(msg, '#000000')
 
         # Create formats
         b_form = workbook.add_format({'bold': True, 'font_color': colour})

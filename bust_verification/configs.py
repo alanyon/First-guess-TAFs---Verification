@@ -3,6 +3,7 @@ Module containing constants for use in other scripts.
 """
 from datetime import datetime, timedelta
 from dateutil.rrule import DAILY, rrule
+import csv
 import os
 import json
 
@@ -40,6 +41,36 @@ METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
 
 # TAF terms
 TAF_TERMS = ['BECMG', 'TEMPO', 'PROB30', 'PROB40']
+
+# Path to the shared TAF info table (issue frequencies and forecast lengths)
+TAF_INFO_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            '..', 'standard_verification', 'taf_info.csv')
+
+
+def _load_taf_freqs(path):
+    """
+    Loads TAF issue frequencies (hours between successive TAFs) keyed by
+    (icao, taf_len). A TAF is only the valid/current forecast for taf_freq
+    hours after issue, after which a newer TAF supersedes it. The same ICAO
+    can issue multiple products of differing lengths/frequencies, so the
+    forecast length is part of the key.
+    """
+    freqs = {}
+    with open(path, newline='') as csv_file:
+        for row in csv.DictReader(csv_file):
+            try:
+                icao = row['icao'].strip()
+                taf_len = int(row['taf_len'])
+                taf_freq = int(row['taf_freq'])
+            except (KeyError, ValueError, AttributeError):
+                continue
+            freqs[(icao, taf_len)] = taf_freq
+    return freqs
+
+
+# Lookup used to limit bust checking to each TAF's valid (most recently
+# issued) window
+TAF_FREQS = _load_taf_freqs(TAF_INFO_CSV)
 
 # To convert heading into direction label (N, S, E or W)
 NUM_TO_DIR = dict(zip(range(0, 370, 10), 

@@ -294,15 +294,28 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
             if not match:
                 continue
 
-            # Get all METARs valid for TAF period
-            v_metars = [metar for vdt, metar in metars if start <= vdt <= end]
+            # Limit checking to the window in which this TAF is still the
+            # most recently issued (valid) forecast. A newer TAF is issued
+            # every taf_freq hours and supersedes this one, so busts can
+            # only occur within the first taf_freq hours of its period.
+            valid_end = get_valid_end(icao, start, end)
+
+            # Get all METARs valid while this TAF is still the current one.
+            # A METAR at exactly valid_end belongs to the superseding TAF,
+            # so exclude it when the window has been truncated.
+            if valid_end < end:
+                v_metars = [metar for vdt, metar in metars
+                            if start <= vdt < valid_end]
+            else:
+                v_metars = [metar for vdt, metar in metars
+                            if start <= vdt <= valid_end]
 
             # Count busts and cats covered for all TAF types
             all_tafs = [*a_tafs, man_taf]
             all_busts, all_cats_covered = [], []
             for taf in all_tafs:
                 busts, cats_covered = count_busts(taf, v_metars, icao, start,
-                                                  end)
+                                                  valid_end)
                 all_busts.append(busts)
                 all_cats_covered.append(cats_covered)
 
@@ -310,8 +323,8 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
             if any(busts is None for busts in all_busts):
                 continue
 
-            # Number of METARs expected during TAF period
-            num_float = (end - start).total_seconds() / 1800
+            # Number of METARs expected during the valid TAF window
+            num_float = (valid_end - start).total_seconds() / 1800
             holders['metars_used'][icao] += int(np.round(num_float))
 
             # Collect into dictionaries
@@ -737,10 +750,41 @@ def run_merge(num_chunks):
     make_plots(holders)
 
 
+def get_valid_end(icao, start, end):
+    """
+    Returns the time until which a TAF is the most recently issued (valid)
+    forecast.
+
+    A new TAF is issued every taf_freq hours (from taf_info.csv) and
+    supersedes the previous one, so a TAF can only be verified against
+    METARs within the first taf_freq hours of its forecast period. If the
+    frequency is unknown, the full TAF period is used.
+
+    Args:
+        icao (str): ICAO of TAF
+        start (datetime): Start time of TAF
+        end (datetime): End time of TAF
+    Returns:
+        valid_end (datetime): End of the TAF's valid window
+    """
+    # TAF forecast length in hours (end can be xx:59 for 24Z groups, so
+    # round to the nearest hour)
+    taf_len = int(round((end - start).total_seconds() / 3600))
+
+    # Issue frequency for this ICAO and TAF length
+    taf_freq = cf.TAF_FREQS.get((icao, taf_len))
+
+    # Without a known frequency, fall back to the full TAF period
+    if taf_freq is None:
+        return end
+
+    # The TAF is superseded after taf_freq hours
+    return min(end, start + timedelta(hours=taf_freq))
+
+
 def get_taf_length(taf):
     """
     Returns the length of the TAF (base conditions plus change groups).
-
     Args:
         taf (str): TAF to check
     Returns:
