@@ -3,8 +3,15 @@ Module to extract recent TAFs (previous 180 days) and calculate
 verification scores for each TAF type and airport. The scores are saved
 to a CSV file for each airport.
 
+The work is split into two entry points so the expensive per-station
+scoring can be fanned out into parallel Cylc jobs:
+    ``python rolling.py prepare``        - run-once shared setup
+    ``python rolling.py station <ICAO>`` - score a single airport
+
 Functions:
-    main(): Main function to extract TAFs and calculate scores.
+    prepare(): Run-once shared setup (extract, decode, write configs).
+    verify_station(): Score a single airport (the parallel unit of work).
+    get_date_range(): Derive the verification period from the cycle date.
     analyse_tafs(): Analyse TAFs for a given airport and TAF type.
     calc_scores(): Calculate scores for a given airport and TAF type.
     convert_manual_tafs(): Convert manual TAFs to verification format.
@@ -14,6 +21,7 @@ Functions:
 
 Written by Andre Lanyon, 2026.
 """
+import argparse
 import os
 import subprocess
 from datetime import datetime, timedelta
@@ -36,10 +44,33 @@ INFO_FILE = os.environ['INFO_FILE']
 AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
 
 
-def main():
+def get_date_range():
     """
-    Main function to extract TAFs, decode them, and calculate
-    verification scores.
+    Derive the verification period from the cycle date.
+
+    The period ends the day before the cycle date and starts 180 days
+    earlier. Both the prepare and per-station steps derive the range from
+    CYCLE_DATE so they always agree without having to pass dates between
+    jobs.
+
+    Args:
+        None
+    Returns:
+        start_dt (datetime): Start datetime for the verification period
+        end_dt (datetime): End datetime for the verification period
+    """
+    end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
+    start_dt = end_dt - timedelta(days=180)
+    return start_dt, end_dt
+
+
+def prepare():
+    """
+    Run-once shared setup: extract and decode the TAFs and write the
+    config files/directories that every per-station job reads.
+
+    This is the serial part of the workflow; the expensive per-station
+    scoring is fanned out into parallel jobs (see verify_station).
 
     Args:
         None
@@ -51,9 +82,8 @@ def main():
         os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
     os.system(f'rm -rf {DATA_DIR}/decodes/*')
 
-    # Start 180 days before yesterday and end 180 days later
-    end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
-    start_dt = end_dt - timedelta(days=180)
+    # Determine the verification period
+    start_dt, end_dt = get_date_range()
 
     # Get TAFs for 180 day period
     all_tafs = get_tafs(start_dt, end_dt)
@@ -61,26 +91,45 @@ def main():
     # Decode TAFs
     decode_tafs(all_tafs)
 
-    # Update config files for each TAF type
+    # Update config files for each TAF type and make output directories
     update_configs_make_dirs(all_tafs)
 
-    # Loop through airport info dataframe to get ICAOs
-    for _, row in AIRPORT_INFO.iterrows():
+    # Ensure the contingency table directory the station jobs write to
+    # exists before any of them run
+    os.makedirs(f'{DATA_DIR}/cts', exist_ok=True)
 
-        # Ignore long TAFs for London City (verification code can't deal
-        # with two TAFs with same ICAO)
-        if row['airport_name'] == 'London City (long)':
-            continue
 
-        # Ignore defence TAFs
-        if row['bench'] == 'defence':
-            continue
+def verify_station(icao):
+    """
+    Calculate verification scores for a single airport. This is the unit
+    of work that is fanned out into parallel Cylc jobs.
 
-        # Try to calculate scores (fails if no TAF data, hence except)
-        try:
-            calc_scores(row, start_dt, end_dt)
-        except OSError as e:
-            print(f"Error processing ICAO {row['icao']}: {e}")
+    Args:
+        icao (str): ICAO code for the airport to verify
+    Returns:
+        None
+    """
+    # Determine the verification period (matches the prepare step)
+    start_dt, end_dt = get_date_range()
+
+    # Select verifiable airports, ignoring defence TAFs and the duplicate
+    # long London City row (the verification code can't deal with two
+    # TAFs sharing an ICAO)
+    stations = AIRPORT_INFO[
+        (AIRPORT_INFO['bench'] != 'defence')
+        & (AIRPORT_INFO['airport_name'] != 'London City (long)')]
+
+    # Find this station's row
+    matches = stations[stations['icao'] == icao]
+    if matches.empty:
+        raise SystemExit(f'ICAO {icao} is not a verifiable station')
+    row = matches.iloc[0]
+
+    # Try to calculate scores (fails if no TAF data, hence except)
+    try:
+        calc_scores(row, start_dt, end_dt)
+    except OSError as e:
+        print(f'Error processing ICAO {icao}: {e}')
 
 
 def analyse_tafs(icao, start_dt, end_dt, length):
@@ -102,6 +151,13 @@ def analyse_tafs(icao, start_dt, end_dt, length):
         vis_file = f'{out_dir}/{icao}_90_vis.nc'
         clb_file = f'{out_dir}/{icao}_90_clb.nc'
         config_file = f'{DATA_DIR}/{taf_type}.cfg'
+
+        # Remove any stale NetCDF from a previous run: VerPy writes with
+        # overwrite=False, so leftover files would break a rerun (e.g. a
+        # Cylc retry of this station)
+        for stale in (vis_file, clb_file):
+            if os.path.exists(stale):
+                os.remove(stale)
 
         # Call driver code
         dv.main_from_params(start_dt=start_dt, end_dt=end_dt, sitelist=[icao],
@@ -400,4 +456,16 @@ def update_configs_make_dirs(all_tafs):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description='Rolling TAF verification (prepare or per-station).')
+    subparsers = parser.add_subparsers(dest='mode', required=True)
+    subparsers.add_parser('prepare', help='Run the shared preparation step')
+    station_parser = subparsers.add_parser(
+        'station', help='Verify a single station')
+    station_parser.add_argument('icao', help='ICAO code of the station')
+
+    cli_args = parser.parse_args()
+    if cli_args.mode == 'prepare':
+        prepare()
+    elif cli_args.mode == 'station':
+        verify_station(cli_args.icao)
