@@ -286,9 +286,9 @@ def line_figure(icao, param, score_name, param_df, palette_13):
                 break
     score_df = score_df[new_cols]
 
-    # No TAF type columns matched for this param/score combination, so
-    # there's nothing to plot; skip rather than crash on an empty frame
-    if score_df.columns.tolist() == ['Date']:
+    # No TAF type columns matched for this param/score combination, or
+    # there are no rows at all; skip rather than crash on an empty frame
+    if score_df.columns.tolist() == ['Date'] or score_df.empty:
         print(f'No data for {icao} {param} {score_name}, skipping plot')
         return
 
