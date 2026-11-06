@@ -9,7 +9,7 @@
 export VERIF_PROFILE=${VERIF_PROFILE:-standard}
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260805_new_method
+VER_DATES=20230805-20261106
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
 
@@ -20,17 +20,17 @@ export TAFS_DIR=${DATA_DIR}/tafs
 # Select the verification period. Override before sourcing, e.g.
 #   export VERIF_PERIOD=recent
 # Supported periods:
-#   full   - 05/08/2023 to 05/08/2026 (default)
-#   recent - 23/01/2026 to 05/08/2026
+#   full   - 05/08/2023 to 06/11/2026 (default)
+#   recent - 23/01/2026 to 06/11/2026
 export VERIF_PERIOD=${VERIF_PERIOD:-full}
 case "${VERIF_PERIOD}" in
     full)
         export VERIF_START=20230805
-        export VERIF_END=20260805
+        export VERIF_END=20261106
         ;;
     recent)
         export VERIF_START=20260123
-        export VERIF_END=20260805
+        export VERIF_END=20261106
         ;;
     *)
         echo "Unknown VERIF_PERIOD='${VERIF_PERIOD}'." \
