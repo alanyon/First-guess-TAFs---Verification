@@ -22,6 +22,7 @@ Written by Andre Lanyon.
 import itertools
 import os
 import sys
+import traceback
 from copy import deepcopy
 from datetime import datetime, timedelta
 
@@ -83,25 +84,29 @@ def make_plots(holders):
     # ps.write_to_excel(holders, 'wind')
     ps.write_to_excel(holders, 'all')
 
-    # # Make plots
-    # ps.plot_dirs(holders)
-    summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
-    ps.plot_param(holders, 'vis', summary_stats)
-    ps.plot_param(holders, 'wx', summary_stats)
-    ps.plot_param(holders, 'cld', summary_stats)
-    ps.plot_param(holders, 'wind', summary_stats)
+    for type_group in cf.PLOT_TYPE_GROUPS:
+        taf_types = {short: cf.TAF_TYPES[short] for short in type_group}
+        if type_group == ['mn', 'ma']:
+            taf_types['mn'] = 'Auto TAFs'
+        summary_stats = {'Bust Type': [], 'TAF Type': [], 'Number of Busts': []}
+        for param in ['vis', 'wx', 'cld', 'wind']:
+            ps.plot_param(holders, param, summary_stats, taf_types)
 
-    # TESTING #
-    # Keep only totals and significant weather bust types
-    summary_stats = pd.DataFrame(summary_stats)
-    summary_stats = summary_stats[summary_stats['Bust Type'].isin(
-        ['Total\nvisibility busts', 'Significant\nweather busts', 
-         'Total\ncloud busts', 'Total\nwind busts'])]
+        summary_stats = pd.DataFrame(summary_stats)
+        summary_stats = summary_stats[summary_stats['Bust Type'].isin(
+            ['Total\nvisibility busts', 'Observed\nvisibility higher',
+             'Observed\nvisibility lower', 'Significant\nweather busts',
+             'Total\ncloud busts', 'Observed\ncloud higher',
+             'Observed\ncloud lower', 'Total\nwind busts',
+             'Observed\nwind higher', 'Observed\nwind lower'])]
 
-    ps.plot_summary(summary_stats)
-    # ps.plot_wx(holders)
-    ps.plot_taf_lens(holders)
-    ps.plot_cats(holders)
+        ps.plot_summary(summary_stats, taf_types)
+        ps.plot_taf_lens(holders, taf_types)
+        ps.plot_cats(holders, taf_types)
+        ps.plot_cat_busts(holders, 'vis', taf_types)
+        ps.plot_cat_busts(holders, 'cld', taf_types)
+
+    ps.archive_ungrouped_plots()
 
 
 def add_cats(holders, s_type, icao, cats, t_type, w_type):
@@ -153,7 +158,7 @@ def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
         return
     
     # Loop through all busts and METARs
-    for (busts, metar, _) in busts_metars:
+    for (busts, metar, _, cat_range) in busts_metars:
 
         # For wind stats
         if s_type == 'wind':
@@ -190,6 +195,12 @@ def add_stats(holders, s_type, icao, p_busts, t_type, w_type):
 
             holders[s_key][icao][f'{t_type} all'] += 1
             holders[s_key][icao][f'{t_type} {busts}'] += 1
+
+            # Record which forecast category was breached
+            breach_val = max(cat_range) if busts == 'increase' \
+                else min(cat_range)
+            cat_label = cf.get_cat_label(s_type, breach_val)
+            holders[f'{s_type}_cat_stats'][icao][t_type][busts][cat_label] += 1
 
         # For wx stats
         elif s_type == 'wx':
@@ -250,20 +261,32 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
     icao_auto_tafs = [[row for row in tafs if icao in row]
                       for tafs in auto_tafs]
 
+    first_rows = []
+    rows_by_validity = []
+    for type_index, taf_rows in enumerate(icao_auto_tafs):
+        grouped_rows = {}
+        for row in taf_rows:
+            validity = datetime.strptime(row[4], '%d-%b-%y') + \
+                timedelta(hours=int(row[5][:2]))
+            grouped_rows.setdefault(validity, []).append(row)
+            if type_index == 0:
+                first_rows.append((validity, row))
+        rows_by_validity.append(grouped_rows)
+
+    matching_rows = (
+        (validity, rows)
+        for validity, first_row in first_rows
+        for rows in itertools.product(
+            [first_row],
+            *(grouped_rows.get(validity, [])
+              for grouped_rows in rows_by_validity[1:]))
+    )
+
     # Loop through all IMPROVER TAFs for ICAO
-    for auto_taf_rows in itertools.product(*icao_auto_tafs):
+    for vdt, auto_taf_rows in matching_rows:
 
         # Get required TAF variables
-        a_vdts = [datetime.strptime(row[4], '%d-%b-%y') +
-                  timedelta(hours=int(row[5][:2])) for row in auto_taf_rows]
         a_tafs = [row[10][46:].split() for row in auto_taf_rows]
-
-        # Continue to next iteration if wrong validity time
-        if not all(vdt == a_vdts[0] for vdt in a_vdts):
-            continue
-
-        # Now vdts must be the same
-        vdt = a_vdts[0]
 
         # Get start and end times of auto TAFs
         a_starts, a_ends = [], []
@@ -347,11 +370,79 @@ def day_icao_stats(holders, icao, auto_tafs, man_tafs, metars):
             break
 
 
+def metdb_cache_path(report_type, start_time):
+    """Returns the cache file path for a one-day MetDB batch."""
+    return os.path.join(cf.METDB_CACHE_DIR, report_type,
+                        f'{start_time[:8]}.npz')
+
+
+def load_cached_batch(report_type, start_time):
+    """Returns a cached MetDB batch, or None if not cached/unreadable."""
+    path = metdb_cache_path(report_type, start_time)
+    if not os.path.exists(path):
+        return None
+    try:
+        with np.load(path, allow_pickle=False) as cached:
+            return np.ma.MaskedArray(cached['data'], mask=cached['mask'])
+    except (OSError, ValueError, KeyError) as error:
+        print(f'Unreadable MetDB cache file {path}: {error}',
+              file=sys.stderr, flush=True)
+        return None
+
+
+def save_cached_batch(report_type, start_time, batch):
+    """Writes a MetDB batch to the cache (atomically, as workers overlap)."""
+    # Recent days may still receive late reports, so leave them uncached
+    day = datetime.strptime(start_time[:8], '%Y%m%d')
+    if day > datetime.now() - timedelta(days=2):
+        return
+    path = metdb_cache_path(report_type, start_time)
+    tmp_path = f'{path}.{os.getpid()}.tmp'
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(tmp_path, 'wb') as tmp_file:
+            np.savez(tmp_file, data=np.ma.getdata(batch),
+                     mask=np.ma.getmaskarray(batch))
+        os.replace(tmp_path, path)
+    except (OSError, ValueError) as error:
+        print(f'Could not cache MetDB batch to {path}: {error}',
+              file=sys.stderr, flush=True)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def get_metdb_batch(report_type, start_time, end_time, report_element):
+    """
+    Retrieve one bulk batch, from the local cache if available, otherwise
+    from MetDB (caching the result). Returns None on a MetDB failure.
+    """
+    batch = load_cached_batch(report_type, start_time)
+    if batch is not None:
+        return batch
+    try:
+        batch = metdb.obs(
+            cf.METDB_EMAIL, report_type,
+            keywords=['PLATFORM EG', f'START TIME {start_time}Z',
+                      f'END TIME {end_time}Z'],
+            elements=['ICAO_ID', report_element], timeout=RETRIEVE_TIMEOUT)
+    except OSError as error:
+        print(f'MetDB batch failed: {report_type} {start_time}Z to '
+              f'{end_time}Z: {type(error).__name__}: {error}',
+              file=sys.stderr, flush=True)
+        return None
+    save_cached_batch(report_type, start_time, batch)
+    return batch
+
+
 def get_day_man_tafs_metars(day):
     """
     Extracts from metdb all manual TAFs for required ICAOs for specified
     day and all METARs for required ICAOs for specified day and two
     following days (to cover all valid times covered by TAFs).
+
+    Failed bulk batches are logged and omitted; successful batches are
+    retained. Returned observations may therefore cover only part of the
+    three-day period. No per-report requests or retries are made.
 
     Args:
         day (datetime): Day to extract TAFs and METARs for
@@ -366,37 +457,34 @@ def get_day_man_tafs_metars(day):
                  for ind in range(3)]
 
     # Get all TAFs for day
-    all_tafs = metdb.obs(cf.METDB_EMAIL, 'TAFS',
-                         keywords=['PLATFORM EG',
-                                   f'START TIME {start_times[0]}Z',
-                                   f'END TIME {end_times[0]}Z'],
-                         elements=['ICAO_ID', 'TAF_RPT_TXT'],
-                         timeout=RETRIEVE_TIMEOUT)
+    all_tafs = get_metdb_batch('TAFS', start_times[0], end_times[0],
+                              'TAF_RPT_TXT')
 
     # Get METARs for all possible times TAFs cover (3 days)
-    all_metars = [metdb.obs(cf.METDB_EMAIL, 'METARS',
-                            keywords=['PLATFORM EG',
-                                      f'START TIME {start_time}Z',
-                                      f'END TIME {end_time}Z'],
-                            elements=['ICAO_ID', 'MTR_RPT_TXT'],
-                            timeout=RETRIEVE_TIMEOUT)
-                  for start_time, end_time in zip(start_times, end_times)]
+    all_metars = []
+    for start_time, end_time in zip(start_times, end_times):
+        batch = get_metdb_batch('METARS', start_time, end_time, 'MTR_RPT_TXT')
+        if batch is not None:
+            all_metars.append(batch)
 
     # Get SPECIs for all possible times TAFs cover
-    all_specis = [metdb.obs(cf.METDB_EMAIL, 'SPECI',
-                            keywords=['PLATFORM EG',
-                                      f'START TIME {start_time}Z',
-                                      f'END TIME {end_time}Z'],
-                            elements=['ICAO_ID', 'MTR_RPT_TXT'],
-                            timeout=RETRIEVE_TIMEOUT)
-                  for start_time, end_time in zip(start_times, end_times)]
+    all_specis = []
+    for start_time, end_time in zip(start_times, end_times):
+        batch = get_metdb_batch('SPECI', start_time, end_time, 'MTR_RPT_TXT')
+        if batch is not None:
+            all_specis.append(batch)
+
+    successful_batches = int(all_tafs is not None) + len(all_metars) + len(all_specis)
+    print(f'MetDB retrieval {day:%Y-%m-%d}: '
+          f'{successful_batches}/7 bulk batches succeeded', flush=True)
 
     # Get TAFs/METARs for each required ICAO and store in dictionaries
     day_tafs, day_3_metars = {}, {}
     for icao in cf.REQ_ICAOS:
 
         # Get TAFs for ICAO
-        icao_tafs_raw = all_tafs[all_tafs['ICAO_ID'] == icao]
+        icao_tafs_raw = [] if all_tafs is None else \
+            all_tafs[all_tafs['ICAO_ID'] == icao]
         icao_tafs = []
         for taf in icao_tafs_raw:
             taf_list = str(taf['TAF_RPT_TXT'], 'utf-8').strip().split()
@@ -509,6 +597,18 @@ def make_empty_holders():
     metars_used = {icao: 0 for icao in cf.REQ_ICAO_STRS}
     last_day = cf.DAYS[0] - timedelta(days=1)
 
+    # Templates for forecast category breakdowns of vis/cld busts
+    vis_cat_template = {t_type: {b_type: {label: 0 for label in cf.VIS_CAT_LABELS}
+                                 for b_type in ['increase', 'decrease']}
+                        for t_type in cf.TAF_TYPES}
+    cld_cat_template = {t_type: {b_type: {label: 0 for label in cf.CLD_CAT_LABELS}
+                                 for b_type in ['increase', 'decrease']}
+                        for t_type in cf.TAF_TYPES}
+    vis_cat_stats = {icao: deepcopy(vis_cat_template)
+                     for icao in cf.REQ_ICAO_STRS}
+    cld_cat_stats = {icao: deepcopy(cld_cat_template)
+                     for icao in cf.REQ_ICAO_STRS}
+
     # Collect all data into a dictionary
     holders = {
         'wind_info': wind_info, 'vis_info': vis_info, 'cld_info': cld_info,
@@ -516,7 +616,8 @@ def make_empty_holders():
         'vis_stats': vis_stats, 'cld_stats': cld_stats, 'wx_stats': wx_stats,
         'all_stats': all_stats, 'vis_cats': vis_cats, 'cld_cats': cld_cats,
         'taf_lens': taf_lens, 'dirs_stats': dirs_stats,
-        'metars_used': metars_used, 'last_day': last_day}
+        'metars_used': metars_used, 'vis_cat_stats': vis_cat_stats,
+        'cld_cat_stats': cld_cat_stats, 'last_day': last_day}
 
     return holders
 
@@ -629,8 +730,12 @@ def process_days(holders, days, pickle_dir):
         # TAF periods)
         try:
             man_tafs, metars = get_day_man_tafs_metars(day)
-        except:
-            print(f'problem retrieving for day: {day}')
+        except Exception as error:
+            print(f'problem retrieving for day: {day}: '
+                  f'{type(error).__name__}: {error}', flush=True)
+            print(f'Retrieval failed for day: {day}', file=sys.stderr,
+                  flush=True)
+            traceback.print_exc()
             continue
 
         # Loop through required ICAOs
@@ -772,7 +877,7 @@ def get_valid_end(icao, start, end):
     taf_len = int(round((end - start).total_seconds() / 3600))
 
     # Issue frequency for this ICAO and TAF length
-    taf_freq = cf.TAF_FREQS.get((icao, taf_len))
+    taf_freq = cf.find_taf_freq(cf.TAF_FREQS, icao, taf_len)
 
     # Without a known frequency, fall back to the full TAF period
     if taf_freq is None:

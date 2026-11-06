@@ -9,18 +9,27 @@ import json
 
 # Import environment variables
 D_DIR = os.environ['DATA_DIR']
+# Period-specific outputs (pickles, plots, spreadsheets)
+OUT_DIR = os.environ.get('OUT_DIR', D_DIR)
 # Verification setup (standard / ml / fog); used to keep each setup's output
 # filenames distinct so runs don't overwrite one another
 PROFILE = os.environ.get('VERIF_PROFILE', 'standard')
 # Directory for pickled bust data, kept per-profile so a fog (or ml) run
 # doesn't overwrite the standard run's pickles
-PICKLE_DIR = f'{D_DIR}/pickles' if PROFILE == 'standard' \
-    else f'{D_DIR}/pickles_{PROFILE}'
+PICKLE_DIR = f'{OUT_DIR}/pickles' if PROFILE == 'standard' \
+    else f'{OUT_DIR}/pickles_{PROFILE}'
 T_STRS = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ['VERIF_START']
 VERIF_END = os.environ['VERIF_END']
 PLOT_TITLES = os.environ['PLOT_TITLES']
 TAF_TYPES = json.loads(PLOT_TITLES)
+if PROFILE == 'standard':
+    PLOT_TYPE_GROUPS = [
+        ['o1', 'o3', 'p1', 'p3', 'mn', 'ma'],
+        ['mn', 'ma'],
+    ]
+else:
+    PLOT_TYPE_GROUPS = [list(TAF_TYPES)]
 
 # Accepted first guess TAFs
 AUTO_TAFS_LINES = []
@@ -38,6 +47,7 @@ DAYS = list(rrule(DAILY, interval=1, dtstart=START_DT, until=END_DT))
 
 # For extracting from metdb
 METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
+METDB_CACHE_DIR = '/data/users/andre.lanyon/tafs/metdb_data'
 
 # TAF terms
 TAF_TERMS = ['BECMG', 'TEMPO', 'PROB30', 'PROB40']
@@ -72,6 +82,16 @@ def _load_taf_freqs(path):
 # issued) window
 TAF_FREQS = _load_taf_freqs(TAF_INFO_CSV)
 
+
+def find_taf_freq(freqs, icao, taf_len):
+    """Return the issue frequency for the closest configured product length."""
+    lengths = [length for name, length in freqs if name == icao]
+    if not lengths:
+        return None
+    closest = min(lengths, key=lambda length: (abs(length - taf_len), length))
+
+    return freqs[(icao, closest)]
+
 # To convert heading into direction label (N, S, E or W)
 NUM_TO_DIR = dict(zip(range(0, 370, 10), 
                       list('NNNNNEEEEEEEEESSSSSSSSSWWWWWWWWWNNNNN')))
@@ -83,7 +103,7 @@ DIRS = ['N', 'E', 'S', 'W', 'VRB']
 NAMES = ['wind_info', 'vis_info', 'cld_info', 'wx_info', 'all_info', 
          'wind_stats', 'vis_stats', 'cld_stats', 'wx_stats', 'all_stats', 
          'vis_cats', 'cld_cats', 'taf_lens', 'dirs_stats', 'metars_used', 
-         'last_day']
+         'vis_cat_stats', 'cld_cat_stats', 'last_day']
 
 # Dictionaries mapping short weather names to long names
 W_NAMES = {'vis': 'visibility', 'wind': 'wind', 'wx': 'weather',
@@ -162,3 +182,35 @@ CAT_ORDER = {'Observed visibility higher': 'a',
              'Observed wind lower': 'i',
              'Wind direction busts': 'j',
              'Total wind busts': 'k'}
+
+# Forecast category thresholds and labels, matching the categories defined
+# in the standard_verification cfg files (e.g. no_p10_20_opt_all.cfg) so
+# bust breakdowns line up with the sp_plots skill score breakdowns
+VIS_CAT_THRESH = [350, 800, 1500, 5000, 10000]
+VIS_CAT_LABELS = ['<=300m', '350-750m', '800-1400m', '1500-4900m',
+                  '5000-9000m', '>=10000m']
+CLD_CAT_THRESH = [200, 500, 1000, 1500]
+CLD_CAT_LABELS = ['<=100ft', '200-400ft', '500-900ft', '1000-1400ft',
+                  '>=1500ft']
+
+
+def get_cat_label(param, value):
+    """
+    Returns the forecast category label a visibility (metres) or cloud base
+    (feet) value falls into, using the same thresholds as the
+    standard_verification cfg files.
+
+    Args:
+        param (str): 'vis' or 'cld'
+        value (int): Visibility (metres) or cloud base height (feet)
+    Returns:
+        label (str): Category label
+    """
+    thresholds = VIS_CAT_THRESH if param == 'vis' else CLD_CAT_THRESH
+    labels = VIS_CAT_LABELS if param == 'vis' else CLD_CAT_LABELS
+
+    for bound, label in zip(thresholds, labels):
+        if value < bound:
+            return label
+
+    return labels[-1]

@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 import metdb
 import pandas as pd
 import xlsxwriter
+from configs import find_taf_freq
 from taf_monitor.checking import CheckTafThread
 from taf_monitor.time_functionality import ConstructTimeObject
 
@@ -503,7 +504,7 @@ def get_valid_end(icao, start, end):
     taf_len = int(round((end - start).total_seconds() / 3600))
 
     # Issue frequency for this ICAO and TAF length
-    taf_freq = TAF_FREQS.get((icao, taf_len))
+    taf_freq = find_taf_freq(TAF_FREQS, icao, taf_len)
 
     # Without a known frequency, fall back to the full TAF period
     if taf_freq is None:

@@ -9,9 +9,53 @@
 export VERIF_PROFILE=${VERIF_PROFILE:-standard}
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20260805_test
+VER_DATES=20230805-20260805_new_method
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
+
+# Directory holding the TAF text files to decode (the 'ml' profile uses TAFs
+# made before and after ML adjustments, which are kept in their own directory)
+export TAFS_DIR=${DATA_DIR}/tafs
+
+# Select the verification period. Override before sourcing, e.g.
+#   export VERIF_PERIOD=recent
+# Supported periods:
+#   full   - 05/08/2023 to 05/08/2026 (default)
+#   recent - 23/01/2026 to 05/08/2026
+export VERIF_PERIOD=${VERIF_PERIOD:-full}
+case "${VERIF_PERIOD}" in
+    full)
+        export VERIF_START=20230805
+        export VERIF_END=20260805
+        ;;
+    recent)
+        export VERIF_START=20260123
+        export VERIF_END=20260805
+        ;;
+    *)
+        echo "Unknown VERIF_PERIOD='${VERIF_PERIOD}'." \
+             "Valid options: full, recent" >&2
+        exit 1
+        ;;
+esac
+
+# Months (YYYYMM) overlapping the verification period
+MONTHS=""
+_month=${VERIF_START:0:6}
+while [[ ${_month} -le ${VERIF_END:0:6} ]]; do
+    MONTHS="${MONTHS} ${_month}"
+    _month=$(date -d "${_month}01 +1 month" +%Y%m)
+done
+
+# Period-dependent outputs (verification results, stats, plots, bust pickles).
+# The full period keeps the original top-level locations. Decoded TAFs are
+# shared by all periods.
+if [[ "${VERIF_PERIOD}" == full ]]; then
+    export OUT_DIR=${DATA_DIR}
+else
+    export OUT_DIR=${DATA_DIR}/period_${VERIF_START}-${VERIF_END}
+fi
+export STATS_DIR=${OUT_DIR}/stats
 
 # Profile-specific TAF types, combinations, plot labels and ML factor.
 # TAF_TYPES        : names of the TAF types (also used for cfg/db/out names)
@@ -22,28 +66,27 @@ export DECODE_DIR=${DATA_DIR}/decodes
 #                    (set to 1 when the full dataset is used)
 case "${VERIF_PROFILE}" in
     standard)
-        export TAF_TYPES="no_p30_40_opt_all no_p20_30_opt_all \
-                          no_p10_20_opt_all no_p30_40_pes_all \
-                          no_p20_30_pes_all no_p10_20_pes_all Manual"
-        export TAF_TYPES_SHORT="o1 o2 o3 p1 p2 p3 ma"
-        export COMBS="o1o3 p1p3 p3o3 p3ma o3ma"
-        export PLOT_TITLES='{"o1": "Optimistic Auto TAFs\n(30th/40th percentiles)",
-                             "o2": "Optimistic Auto TAFs\n(20th/30th percentiles)",
-                             "o3": "Optimistic Auto TAFs\n(10th/20th percentiles)",
-                             "p1": "Pessimistic Auto TAFs\n(30th/40th percentiles)",
-                             "p2": "Pessimistic Auto TAFs\n(20th/30th percentiles)",
-                             "p3": "Pessimistic Auto TAFs\n(10th/20th percentiles)",
+        export TAF_TYPES="no_p30_40_opt_all no_p10_20_opt_all \
+                          no_p30_40_pes_all no_p10_20_pes_all \
+                          no_p10_20_mix_all Manual"
+        export TAF_TYPES_SHORT="o1 o3 p1 p3 mn ma"
+        export COMBS="o1o3 p1p3 p3o3 o3mn o3ma p3ma mnma"
+        export PLOT_TITLES='{"o1": "Optimistic Auto TAFs\n(no observations, 30th/40th percentiles)",
+                             "o3": "Optimistic Auto TAFs\n(no observations, 10th/20th percentiles)",
+                             "p1": "Pessimistic Auto TAFs\n(no observations, 30th/40th percentiles)",
+                             "p3": "Pessimistic Auto TAFs\n(no observations, 10th/20th percentiles)",
+                             "mn": "Optimistic/Pessimistic Mix TAFs\n(no observations, 10th/20th percentiles)",
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=1
         ;;
     ml)
-        export TAF_TYPES="no_pes_old xgboost_no_pes_new no_opt_old xgboost_no_opt_new Manual_ml"
-        export TAF_TYPES_SHORT="p1 p2 o1 o2 ma"
-        export COMBS="p2ma o2ma o2p2"
-        export PLOT_TITLES='{"o1": "Optimistic Auto TAFs\n(without ML)",
-                             "o2": "Optimistic Auto TAFs\n(with ML)",
-                             "p1": "Pessimistic Auto TAFs\n(without ML)",
-                             "p2": "Pessimistic Auto TAFs\n(with ML)",
+        export TAFS_DIR=${DATA_DIR}/tafs_ml
+        export TAF_TYPES="no_p10_20_mix_old no_p10_20_mix_new \
+                          Manual_ml"
+        export TAF_TYPES_SHORT="on om ma"
+        export COMBS="onom onma omma"
+        export PLOT_TITLES='{"on": "Optimistic/Pessimistic Mix TAFs\n(without ML)",
+                             "om": "Optimistic/Pessimistic Mix TAFs\n(with ML)",
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=0.25
         ;;
@@ -73,7 +116,6 @@ export ORACLE_TERM=xterm
 export ORACLE_HOME=/usr/lib/oracle/23/client64
 export SHLIB_PATH=/usr/lib/oracle/23/client64/lib
 export PATH=$PATH:/usr/lib/oracle/23/client64/bin
-export STATS_DIR=${DATA_DIR}/stats
 export ALL_TAFS="EGAA EGAC EGAE EGBB EGBJ EGCC EGCK EGCN EGEC EGEO EGFF EGGD \
                  EGGP EGGW EGHC EGHE EGHH EGHI EGHQ EGKA EGKB EGKK EGLC EGLF \
                  EGLL EGMC EGMD EGNC EGNH EGNJ EGNM EGNO EGNR EGNT EGNV EGNX \
@@ -86,7 +128,3 @@ export TAF_9HR="EGHH EGSY EGNJ EGAC EGAE EGBJ EGCK EGEC EGEO EGHI EGNV EGPE \
                 EGTE EGPO EGNH EGNR EGNC EGHC EGHE EGKA EGKB EGLF EGMC EGMD \
                 EGNO EGPA EGPB EGPC EGPI EGPL EGPN EGPU EGSC EGSH EGTC EGTK \
                 EGHQ"
-export VERIF_START=20230805
-export VERIF_END=20240905
-MONTHS="202308 202309 202310 202311 202312 202401 202402 202403 202404 202405 \
-        202406 202407 202408"

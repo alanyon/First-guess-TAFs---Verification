@@ -18,6 +18,8 @@
 # ---------------------------------------------------------------------------
 
 source setup_constants.sh
+echo "Verifying VERIF_PROFILE='${VERIF_PROFILE}'" \
+     "VERIF_PERIOD='${VERIF_PERIOD}' (${VERIF_START}-${VERIF_END}) into ${OUT_DIR}"
 
 # Update config files ONCE, up front. Doing this inside each array task would
 # make many tasks rewrite the same .cfg files at the same time (a race).
@@ -28,7 +30,7 @@ module unload scitools
 # Create output directories and a logs directory for the batch jobs
 mkdir -p logs "${STATS_DIR}" "${STATS_DIR}/per_station"
 for taf_type in ${TAF_TYPES}; do
-    mkdir -p "${DATA_DIR}/${taf_type}"
+    mkdir -p "${OUT_DIR}/${taf_type}"
 done
 
 # Start each run from a clean slate for THIS profile's stats CSVs so reruns

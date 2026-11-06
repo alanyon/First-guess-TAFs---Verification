@@ -14,6 +14,8 @@ import xarray
 # module for calc_scores() without setting them, so read them leniently.
 STATS_DIR = os.environ.get('STATS_DIR')
 DATA_DIR = os.environ['DATA_DIR']
+# Period-specific verification output; the rolling workflow only sets DATA_DIR
+OUT_DIR = os.environ.get('OUT_DIR', DATA_DIR)
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 VERIF_START = os.environ.get('VERIF_START')
 VERIF_END = os.environ.get('VERIF_END')
@@ -65,7 +67,7 @@ def main(param, station):
     # Concatenate monthly files together
     source_list = []
     for taf_type in TAF_TYPES:
-        datadir = f'{DATA_DIR}/{taf_type}'
+        datadir = f'{OUT_DIR}/{taf_type}'
         source = os.path.join(datadir, '{}_*_{}.nc'.format(station,
                                                            param.lower()))
         new_source = os.path.join(datadir, '{}_{}.nc'.format(station,
@@ -240,7 +242,7 @@ def calc_scores(param, station, start, end):
     # Concatenate files together
     source_list = []
     for taf_type in TAF_TYPES:
-        datadir = f'{DATA_DIR}/{taf_type}'
+        datadir = f'{OUT_DIR}/{taf_type}'
         source = os.path.join(datadir, '{}_*_{}.nc'.format(station, param))
         new_source = os.path.join(datadir, '{}_{}.nc'.format(station, param))
 

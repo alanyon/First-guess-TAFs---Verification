@@ -15,6 +15,7 @@ Functions:
 Written by Andre Lanyon
 """
 import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -29,6 +30,35 @@ sns.set_style('darkgrid')
 sns.set(font_scale=1.5)
 
 
+def plot_filename(name, taf_types, icao=None):
+    directory = f'{cf.OUT_DIR}/bust_plots'
+    if icao is not None:
+        directory = f'{directory}/{icao}'
+    suffix = f"_{'_'.join(taf_types)}" if cf.PROFILE == 'standard' else ''
+    return f'{directory}/{name}_{cf.PROFILE}{suffix}.png'
+
+
+def archive_ungrouped_plots():
+    if cf.PROFILE != 'standard':
+        return
+    directory = Path(cf.OUT_DIR) / 'bust_plots'
+    for plot in directory.glob('**/*_standard.png'):
+        relative = plot.relative_to(directory)
+        if 'legacy_ungrouped' in relative.parts:
+            continue
+        replacements = [
+            plot.with_name(f"{plot.stem}_{'_'.join(group)}.png")
+            for group in cf.PLOT_TYPE_GROUPS
+        ]
+        if not replacements or not all(path.is_file() for path in replacements):
+            continue
+        archived = directory / 'legacy_ungrouped' / relative
+        if archived.exists():
+            continue
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        plot.rename(archived)
+
+
 def create_dirs():
     """
     Creates directories if needed.
@@ -39,15 +69,15 @@ def create_dirs():
         None
     """
     # Make plots directory if needed
-    if not os.path.exists(f'{cf.D_DIR}/bust_plots'):
-        os.makedirs(f'{cf.D_DIR}/bust_plots')
+    if not os.path.exists(f'{cf.OUT_DIR}/bust_plots'):
+        os.makedirs(f'{cf.OUT_DIR}/bust_plots')
 
     # Loop through each ICAO
     for icao in cf.REQ_ICAO_STRS:
 
         # Make directory if needed
-        if not os.path.exists(f'{cf.D_DIR}/bust_plots/{icao}'):
-            os.makedirs(f'{cf.D_DIR}/bust_plots/{icao}')
+        if not os.path.exists(f'{cf.OUT_DIR}/bust_plots/{icao}'):
+            os.makedirs(f'{cf.OUT_DIR}/bust_plots/{icao}')
 
 
 def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
@@ -71,7 +101,7 @@ def mets_all(ver_lst, worksheet, workbook, m_row_num, col):
     for bust in ver_lst:
 
         # Unpack list
-        bust_types, metar, _,  = bust
+        bust_types, metar, _, _ = bust
 
         # Join ypes of bust together
         msg = ' and '.join(bust_types)
@@ -138,7 +168,7 @@ def mets_wind(ver_lst, worksheet, workbook, m_row_num, col):
     for bust in ver_lst:
 
         # Unpack list
-        bust_types, metar, _ = bust
+        bust_types, metar, _, _ = bust
 
         # Colour METAR based on bust type
         if bust_types['mean increase'] or bust_types['gust increase']:
@@ -181,7 +211,9 @@ def mets_wind(ver_lst, worksheet, workbook, m_row_num, col):
     return new_lines
 
 
-def plot_cats(holders):
+def plot_cats(holders, taf_types=None):
+
+    taf_types = cf.TAF_TYPES if taf_types is None else taf_types
 
     stats = {'TAF Type': [], 'Parameter': [], 
              'Mean No. of Categories Covered': []}
@@ -193,7 +225,7 @@ def plot_cats(holders):
         for param in ['vis', 'cld']:
 
             # Loop through taf types
-            for t_type, t_name in cf.TAF_TYPES.items():
+            for t_type, t_name in taf_types.items():
 
                 # Get mean number of categories covered and add to 
                 # dictionary
@@ -225,7 +257,7 @@ def plot_cats(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/bust_plots/cats_covered_all_{cf.PROFILE}.png')
+    fig.savefig(plot_filename('cats_covered', taf_types))
     plt.close()
 
 
@@ -267,13 +299,13 @@ def plot_dirs(holders):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/bust_plots/{icao}/dir_busts_all_{cf.PROFILE}.png'
+        img_fname = f'{cf.OUT_DIR}/bust_plots/{icao}/dir_busts_{cf.PROFILE}.png'
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
 
 
-def plot_param(holders, param, summary_stats):
+def plot_param(holders, param, summary_stats, taf_types=None):
     """
     Plots parameter-specific bar chart showing bust information.
 
@@ -286,34 +318,35 @@ def plot_param(holders, param, summary_stats):
     """
     # Get stats dictionary
     stats_abs = holders[f'{param}_stats']
+    taf_types = cf.TAF_TYPES if taf_types is None else taf_types
 
     # Titles, etc, for creating stats dataframes
-    t_num = len(cf.TAF_TYPES)
+    t_num = len(taf_types)
     if param == 'wind':
         bust_types = ['Observed\nwind higher', 'Observed\nwind lower',
                       'Wind direction\nbusts', 'Total\nwind busts'] * t_num
-        taf_types = sum([[p_label] * 4 for p_label in cf.TAF_TYPES.values()],
-                        [])
+        taf_labels = sum([[p_label] * 4 for p_label in taf_types.values()],
+                 [])
         bust_keys = sum([[f'{t_type} increase', f'{t_type} decrease',
                           f'{t_type} dir', f'{t_type} all']
-                         for t_type in cf.TAF_TYPES], [])
+                         for t_type in taf_types], [])
     elif param == 'wx':
         bust_types = ['Significant\nweather busts'] * t_num
-        taf_types = cf.TAF_TYPES.values()
-        bust_keys = [f'{t_type} all' for t_type in cf.TAF_TYPES]
+        taf_labels = list(taf_types.values())
+        bust_keys = [f'{t_type} all' for t_type in taf_types]
     else:
         bust_types = [f'Observed\n{cf.W_NAMES[param]} higher',
                       f'Observed\n{cf.W_NAMES[param]} lower',
                       f'Total\n{cf.W_NAMES[param]} busts'] * t_num
-        taf_types = sum([[p_label] * 3 for p_label in cf.TAF_TYPES.values()],
-                        [])
+        taf_labels = sum([[p_label] * 3 for p_label in taf_types.values()],
+                 [])
         bust_keys = sum([[f'{t_type} increase', f'{t_type} decrease',
-                          f'{t_type} all'] for t_type in cf.TAF_TYPES], [])
+                          f'{t_type} all'] for t_type in taf_types], [])
 
     # Add to summary_stats with number of busts to be updated in
     # following for loop
     summary_stats['Bust Type'].extend(bust_types)
-    summary_stats['TAF Type'].extend(taf_types)
+    summary_stats['TAF Type'].extend(taf_labels)
     total_busts = [0 for _ in bust_types]
 
     # Loop through all icaos
@@ -347,7 +380,7 @@ def plot_param(holders, param, summary_stats):
         total_busts = [x + y for x, y in zip(total_busts, icao_busts)]
 
         # Create dataframe from stats
-        pd_stats = {'Bust Type': bust_types, 'TAF Type': taf_types,
+        pd_stats = {'Bust Type': bust_types, 'TAF Type': taf_labels,
                     'Number of Busts': icao_busts}
 
         # Create bar plot
@@ -365,7 +398,7 @@ def plot_param(holders, param, summary_stats):
         ax.set_ylabel('Bust Type', weight='bold')
 
         # Save and close figure
-        img_fname = f'{cf.D_DIR}/bust_plots/{icao}/{param}_busts_all_{cf.PROFILE}.png'
+        img_fname = plot_filename(f'{param}_busts', taf_types, icao)
         plt.tight_layout()
         fig.savefig(img_fname)
         plt.close()
@@ -376,7 +409,78 @@ def plot_param(holders, param, summary_stats):
     return t_busts
 
 
-def plot_summary(summary_stats):
+def plot_cat_busts(holders, param, taf_types=None):
+    """
+    Plots bar charts breaking down vis/cld busts by the forecast category
+    that was breached (matching the categories used in the standard
+    verification sp_plots), so it's possible to pinpoint which forecast
+    categories lead to the most busts. Produces a plot for each bust
+    direction (higher/lower) plus a combined total across both directions.
+
+    Args:
+        holders (dict): Dictionaries to store data
+        param (str): 'vis' or 'cld'
+    Returns:
+        None
+    """
+    cat_stats = holders[f'{param}_cat_stats']
+    taf_types = cf.TAF_TYPES if taf_types is None else taf_types
+    labels = cf.VIS_CAT_LABELS if param == 'vis' else cf.CLD_CAT_LABELS
+    directions = {'increase': 'higher', 'decrease': 'lower'}
+
+    # Sum busts across all required ICAOs for each TAF type/category/
+    # direction, plus a combined total across both directions
+    totals = {d_key: {t_name: {label: 0 for label in labels}
+                      for t_name in taf_types.values()}
+             for d_key in [*directions, 'total']}
+    for icao in cat_stats:
+        if icao not in cf.REQ_ICAO_STRS:
+            continue
+        for t_type, t_name in taf_types.items():
+            for direction in directions:
+                for label in labels:
+                    n_busts = cat_stats[icao][t_type][direction][label]
+                    totals[direction][t_name][label] += n_busts
+                    totals['total'][t_name][label] += n_busts
+
+    # Create a plot for each bust direction (higher/lower), plus a combined
+    # total across both directions
+    plot_names = {**directions, 'total': 'total (higher + lower)'}
+    for d_key, d_name in plot_names.items():
+
+        # Rearrange into a dataframe for plotting
+        plot_stats = {'TAF Type': [], 'Category': [], 'Number of Busts': []}
+        for t_name, label_counts in totals[d_key].items():
+            for label in labels:
+                plot_stats['TAF Type'].append(t_name)
+                plot_stats['Category'].append(label)
+                plot_stats['Number of Busts'].append(label_counts[label])
+
+        # Create bar plot
+        fig, ax = plt.subplots(figsize=(14, 10))
+        sns.barplot(data=plot_stats, y='Category', x='Number of Busts',
+                    hue='TAF Type', order=labels)
+
+        # Add scores on top of bars
+        for ind in ax.containers:
+            ax.bar_label(ind, fontsize=10)
+
+        # Format axes, etc
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        ax.set_xlabel('Number of Busts', weight='bold')
+        ax.set_ylabel('TAF Category', weight='bold')
+        p_name = cf.W_NAMES[param].capitalize()
+        ax.set_title(f'{p_name} busts ({d_name}) by forecast category',
+                     weight='bold')
+
+        # Save and close figure
+        plt.tight_layout()
+        img_fname = plot_filename(f'{param}_busts_{d_key}_cat', taf_types)
+        fig.savefig(img_fname)
+        plt.close()
+
+
+def plot_summary(summary_stats, taf_types=None):
     """
     Plots summary bar chart showing bust information.
 
@@ -386,6 +490,7 @@ def plot_summary(summary_stats):
         None
     """
     # Create bar plot
+    taf_types = cf.TAF_TYPES if taf_types is None else taf_types
     fig, ax = plt.subplots(figsize=(14, 12))
     sns.barplot(data=summary_stats, x='Number of Busts', y='Bust Type',
                 hue='TAF Type')
@@ -403,7 +508,7 @@ def plot_summary(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/plots/summary_busts_{cf.PROFILE}.png')
+    fig.savefig(plot_filename('summary_busts', taf_types))
     plt.close()
 
 
@@ -435,11 +540,13 @@ def plot_summary_small(summary_stats):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/bust_plots/summary_busts_all_{cf.PROFILE}.png')
+    fig.savefig(f'{cf.OUT_DIR}/bust_plots/summary_busts_small_{cf.PROFILE}.png')
     plt.close()
 
 
-def plot_taf_lens(holders):
+def plot_taf_lens(holders, taf_types=None):
+
+    taf_types = cf.TAF_TYPES if taf_types is None else taf_types
 
     stats = {'TAF Type': [], 'Mean TAF Length': [], 'Airport': []}
 
@@ -447,7 +554,7 @@ def plot_taf_lens(holders):
     for icao in cf.REQ_ICAO_STRS:
 
         # Loop through taf types
-        for t_type, t_name in cf.TAF_TYPES.items():
+        for t_type, t_name in taf_types.items():
 
             # Get mean TAF length and add to dictionary
             taf_lens = holders[f'taf_lens'][icao][t_type]
@@ -475,11 +582,11 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/bust_plots/taf_lengths_all_{cf.PROFILE}.png')
+    fig.savefig(plot_filename('taf_lengths', taf_types))
     plt.close()
 
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(8, 8))
 
     # Create box plot
     t_box = sns.boxplot(data=plot_stats, y='TAF Type', x='Mean TAF Length', 
@@ -493,7 +600,7 @@ def plot_taf_lens(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/bust_plots/taf_lengths_box_all_{cf.PROFILE}.png')
+    fig.savefig(plot_filename('taf_lengths_box', taf_types))
     plt.close()
 
 
@@ -575,7 +682,7 @@ def plot_wx(holders):
 
     # Save and close figure
     plt.tight_layout()
-    fig.savefig(f'{cf.D_DIR}/bust_plots/wx_busts_all_{cf.PROFILE}.png')
+    fig.savefig(f'{cf.OUT_DIR}/bust_plots/wx_busts_{cf.PROFILE}.png')
     plt.close()
 
 
@@ -628,7 +735,7 @@ def write_to_excel(holders, w_type):
     w_info = holders[f'{w_type}_info']
 
     # Open Excel workbook
-    fname = f'{w_type}_vers_{cf.PROFILE}.xlsx'
+    fname = f'{cf.OUT_DIR}/bust_plots/{w_type}_vers_{cf.PROFILE}.xlsx'
     workbook = xlsxwriter.Workbook(fname)
 
     # Create separate worksheet for each ICAO
@@ -731,9 +838,6 @@ def write_to_excel(holders, w_type):
 
     # Close workbook
     workbook.close()
-
-    # Copy Excel file to ml_plots directory
-    os.system(f'mv {fname} {cf.D_DIR}/bust_plots')
 
 
 def write_stats(worksheet, fmt, stats_dict, msg, key_stat, r_num):

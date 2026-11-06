@@ -2,7 +2,7 @@
 #SBATCH --partition=cpu
 #SBATCH --mem=4G
 #SBATCH --ntasks=1
-#SBATCH --time=180
+#SBATCH --time=360
 #SBATCH --output=logs/station_%A_%a.out
 #SBATCH --error=logs/station_%A_%a.err
 
@@ -37,7 +37,7 @@ duration=${length[${icao}]}
 # Ensure output directories exist
 mkdir -p "${STATS_DIR}" "${STATS_DIR}/per_station"
 for taf_type in ${TAF_TYPES}; do
-    mkdir -p "${DATA_DIR}/${taf_type}"
+    mkdir -p "${OUT_DIR}/${taf_type}"
 done
 
 # Run TAF analysis for every month and TAF type for this station
@@ -47,9 +47,12 @@ for month in ${MONTHS}; do
     ndays=$(cal ${month_num} ${year} | awk 'NF {DAYS = $NF}; END {print DAYS}')
     start=${month}010000
     end=${month}${ndays}2359
+    # Clip the first/last months to the verification period
+    [[ ${start} < ${VERIF_START}0000 ]] && start=${VERIF_START}0000
+    [[ ${end} > ${VERIF_END}2359 ]] && end=${VERIF_END}2359
     echo "${icao} ${start} ${end}"
     for taf_type in ${TAF_TYPES}; do
-        outdir=${DATA_DIR}/${taf_type}
+        outdir=${OUT_DIR}/${taf_type}
         outfile=${outdir}/${icao}_${month}.out
         visfile=${outdir}/${icao}_${month}_vis.nc
         clbfile=${outdir}/${icao}_${month}_clb.nc

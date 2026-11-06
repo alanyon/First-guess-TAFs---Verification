@@ -67,6 +67,13 @@ PARAMS = {'vis': 'Visibility', 'clb': 'Cloud'}
 TAF_TYPES_DICT = dict(zip(TAF_TYPES_SHORT, TAF_TYPES))
 TAF_TYPES_INV = {v: k for k, v in TAF_TYPES_DICT.items()}
 TAF_TYPES_FNAME = '_'.join(TAF_TYPES_SHORT)
+if PROFILE == 'standard':
+    PLOT_TYPE_GROUPS = [
+        ['o1', 'o3', 'p1', 'p3', 'mn', 'ma'],
+        ['mn', 'ma'],
+    ]
+else:
+    PLOT_TYPE_GROUPS = [TAF_TYPES_SHORT]
 NUM_CATS = {'vis': 6, 'clb': 5}
 # Category labels for contingency tables (match config thresholds:
 # vis_cats [350, 800, 1500, 5000, 10000], clb_cats [200, 500, 1000, 1500])
@@ -85,6 +92,29 @@ TARGETS = {
 }
 MARKERS = ['o', 'v', 'P', 'X', 's', 'p', '*', 'D']
 SIZES = [50, 50, 60, 50, 50, 60, 80, 40]
+
+
+def get_group_taf_titles(type_group):
+    """Return plot labels, simplifying the auto label for the mn_ma group."""
+    return {
+        short: ('Auto TAFs' if type_group == ['mn', 'ma'] and short == 'mn'
+                else TAF_TYPES_PLOT[short])
+        for short in type_group
+    }
+
+
+def get_comparison_taf_title(short, comb):
+    """Return a plot label with a concise name for the mnma comparison."""
+    if comb == 'mnma' and short == 'mn':
+        return 'Auto TAFs'
+    return TAF_TYPES_PLOT[short]
+
+
+def get_length_taf_title(short, comb):
+    """Return a length-plot annotation label for the mnma comparison."""
+    if comb == 'mnma' and short == 'mn':
+        return 'Auto TAFs'
+    return TAF_TYPES_DICT[short]
 
 
 def main(req_obs):
@@ -204,10 +234,12 @@ def add_detail(ax, lim_min, lim_max, lim_diff, comb):
 
     # Add corner annotations in axes-fraction coordinates with alignment so
     # the text always stays inside the plot regardless of its length
-    ax.text(0.03, 0.97, f'{TAF_TYPES_PLOT[comb[2:]]}\nScores Higher',
+    ax.text(0.03, 0.97,
+            f'{get_comparison_taf_title(comb[2:], comb)}\nScores Higher',
             c='red', fontsize=13, weight='bold', transform=ax.transAxes,
             ha='left', va='top')
-    ax.text(0.97, 0.03, f'{TAF_TYPES_PLOT[comb[:2]]}\nScores Higher',
+    ax.text(0.97, 0.03,
+            f'{get_comparison_taf_title(comb[:2], comb)}\nScores Higher',
             c='green', fontsize=13, weight='bold', transform=ax.transAxes,
             ha='right', va='bottom')
 
@@ -301,12 +333,16 @@ def add_length_detail(ax, param, length, lim_min, lim_max, lim_diff, comb):
                                    for pos in positions]
 
     # Add extra text
-    ax.text(xtl, ytl1, f'{TAF_TYPES_DICT[comb[:2]]}\nTAFs below', color='r')
-    ax.text(xtl, ytl2, f'{TAF_TYPES_DICT[comb[2:]]}\nTAFs above', color='g')
+    ax.text(xtl, ytl1,
+            f'{get_length_taf_title(comb[:2], comb)}\nTAFs below', color='r')
+    ax.text(xtl, ytl2,
+            f'{get_length_taf_title(comb[2:], comb)}\nTAFs above', color='g')
     ax.text(xtr, ytr, 'Both above', color='g')
     ax.text(xbl, ybl, 'Both below', color='r')
-    ax.text(xbr, ybr1, f'{TAF_TYPES_DICT[comb[2:]]}\nTAFs below', color='r')
-    ax.text(xbr, ybr2, f'{TAF_TYPES_DICT[comb[:2]]}\nTAFs above', color='g')
+    ax.text(xbr, ybr1,
+            f'{get_length_taf_title(comb[2:], comb)}\nTAFs below', color='r')
+    ax.text(xbr, ybr2,
+            f'{get_length_taf_title(comb[:2], comb)}\nTAFs above', color='g')
 
     return ax
 
@@ -681,9 +717,11 @@ def make_plot(color_dict, all_stats, score, comb, icao_dict,
 
         # Set titles and axis labels
         ax.set_title(title, fontsize=18, weight='bold')
-        ax.set_xlabel(f'Scores Based on {TAF_TYPES_PLOT[comb[:2]]}',
+        ax.set_xlabel(f'Scores Based on '
+                  f'{get_comparison_taf_title(comb[:2], comb)}',
                       fontsize=14, weight='bold')
-        ax.set_ylabel(f'Scores Based on {TAF_TYPES_PLOT[comb[2:]]}',
+        ax.set_ylabel(f'Scores Based on '
+                  f'{get_comparison_taf_title(comb[2:], comb)}',
                       fontsize=14, weight='bold')
 
     # Build a single shared legend covering every airport from both subplots
@@ -726,78 +764,85 @@ def airport_plot(all_stats, icao, icao_dict):
     Returns:
         None
     """
-    # Consistent colour per TAF type, matching the overall Gerrity and
-    # Peirce box plots (seaborn's default "deep" palette, in the same
-    # op -> pe -> ma order used there)
-    taf_types = list(TAF_TYPES_PLOT.items())
-    n_types = len(taf_types)
-    palette = sns.color_palette('deep', n_types)
-    width = 0.8 / n_types
+    # Keep each TAF type's colour consistent across comparison groups.
+    all_types = list(TAF_TYPES_PLOT.items())
+    all_palette = sns.color_palette('deep', len(all_types))
+    color_by_type = {short: all_palette[i]
+                     for i, (short, _) in enumerate(all_types)}
 
-    # 2 rows (parameters) x 2 columns (overall Gerrity, per-category Peirce)
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-
-    for row, param in enumerate(PARAMS):
-
-        i_stats = all_stats[param][icao]
-        ncats = NUM_CATS[param]
-
-        # Left column: overall Gerrity skill score, one bar per TAF type
-        ax = axes[row, 0]
-        xg = np.arange(n_types)
-        for i, (short, name) in enumerate(taf_types):
-            val = i_stats.get(f'g_{short}', np.nan)
-            ax.bar(xg[i], val, 0.6, label=name, color=palette[i],
-                   edgecolor='black', linewidth=0.6)
-        ax.axhline(0, color='grey', linewidth=0.8)
-        ax.set_xticks(xg)
-        ax.set_xticklabels([])
-        ax.set_xlabel('TAF Type', weight='bold')
-        ax.set_ylabel('Gerrity Skill Score', weight='bold')
-        ax.set_title(f'{PARAMS[param]} \u2013 Overall Gerrity Skill',
-                     weight='bold', fontsize=14)
-
-        # Right column: Peirce skill score for each TAF category
-        ax = axes[row, 1]
-        cats = np.arange(1, ncats + 1)
-        xc = np.arange(ncats)
-        for i, (short, name) in enumerate(taf_types):
-            vals = [i_stats.get(f'sp_{short}_{c}', np.nan) for c in cats]
-            ax.bar(xc + (i - (n_types - 1) / 2) * width, vals, width,
-                   label=name, color=palette[i], edgecolor='black',
-                   linewidth=0.6)
-        ax.axhline(0, color='grey', linewidth=0.8)
-        ax.set_xticks(xc)
-        ax.set_xticklabels([str(c) for c in cats])
-        ax.set_xlabel('TAF Category', weight='bold')
-        ax.set_ylabel('Peirce Skill Score', weight='bold')
-        ax.set_title(f'{PARAMS[param]} \u2013 Peirce Skill by Category',
-                     weight='bold', fontsize=14)
-
-    # Single shared legend for all subplots
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='lower center', ncol=n_types,
-               fontsize=13, title='TAF Type', bbox_to_anchor=(0.5, -0.01))
-
-    # Overall title using the airport name
     airport_name = icao_dict.get(icao, icao)
-    fig.suptitle(f'{airport_name} ({icao}) \u2013 TAF Verification Skill '
-                 'Scores', weight='bold', fontsize=18)
+    for type_group in PLOT_TYPE_GROUPS:
+        group_titles = get_group_taf_titles(type_group)
+        taf_types = [(short, group_titles[short]) for short in type_group]
+        n_types = len(taf_types)
+        width = 0.8 / n_types
 
-    # Save and close figure
-    fig.tight_layout(rect=[0, 0.03, 1, 0.96])
-    fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_'
-             f'{TAF_TYPES_FNAME}.png')
-    fig.savefig(fname, bbox_inches='tight')
-    plt.close()
+        # 2 rows (parameters) x 2 columns (Gerrity, category Peirce)
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+        for row, param in enumerate(PARAMS):
+            i_stats = all_stats[param][icao]
+            ncats = NUM_CATS[param]
+
+            # Left column: overall Gerrity skill, one bar per TAF type
+            ax = axes[row, 0]
+            xg = np.arange(n_types)
+            for i, (short, name) in enumerate(taf_types):
+                val = i_stats.get(f'g_{short}', np.nan)
+                ax.bar(xg[i], val, 0.6, label=name,
+                       color=color_by_type[short], edgecolor='black',
+                       linewidth=0.6)
+            ax.axhline(0, color='grey', linewidth=0.8)
+            ax.set_xticks(xg)
+            ax.set_xticklabels([])
+            ax.set_xlabel('TAF Type', weight='bold')
+            ax.set_ylabel('Gerrity Skill Score', weight='bold')
+            ax.set_title(f'{PARAMS[param]} \u2013 Overall Gerrity Skill',
+                         weight='bold', fontsize=14)
+
+            # Right column: Peirce skill score for each TAF category
+            ax = axes[row, 1]
+            cats = np.arange(1, ncats + 1)
+            xc = np.arange(ncats)
+            for i, (short, name) in enumerate(taf_types):
+                vals = [i_stats.get(f'sp_{short}_{c}', np.nan)
+                        for c in cats]
+                ax.bar(xc + (i - (n_types - 1) / 2) * width, vals, width,
+                       label=name, color=color_by_type[short],
+                       edgecolor='black', linewidth=0.6)
+            ax.axhline(0, color='grey', linewidth=0.8)
+            ax.set_xticks(xc)
+            ax.set_xticklabels([str(c) for c in cats])
+            ax.set_xlabel('TAF Category', weight='bold')
+            ax.set_ylabel('Peirce Skill Score', weight='bold')
+            ax.set_title(f'{PARAMS[param]} \u2013 Peirce Skill by Category',
+                         weight='bold', fontsize=14)
+
+        # Single shared legend, with a compact multi-row layout.
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='lower center',
+                   ncol=min(4, n_types), fontsize=9, title='TAF Type',
+                   bbox_to_anchor=(0.5, -0.01))
+
+        # Overall title using the airport name
+        fig.suptitle(f'{airport_name} ({icao}) \u2013 TAF Verification Skill '
+                     'Scores', weight='bold', fontsize=18)
+
+        # Save and close figure
+        fig.tight_layout(rect=[0, 0.10, 1, 0.96])
+        group_fname = '_'.join(type_group)
+        fname = (f'{PLOTS_DIR}/airport_plots/{icao}_scores_'
+                 f'{group_fname}.png')
+        fig.savefig(fname, bbox_inches='tight')
+        plt.close()
 
 
 def confusion_plot(all_stats, icao, icao_dict):
     """
     Creates contingency-table (confusion-matrix) heatmaps for one airport.
 
-    One figure is produced per parameter (visibility and cloud base), with
-    the contingency table for each TAF type stacked vertically. Rows are
+    One figure is produced per parameter and comparison group, with the
+    contingency table for each TAF type stacked vertically. Rows are
     forecast categories, columns are observed categories, with marginal
     totals. Ported from the rolling branch's confusion-matrix style but
     sourcing values from the stats dictionary.
@@ -810,7 +855,6 @@ def confusion_plot(all_stats, icao, icao_dict):
         None
     """
     airport_name = icao_dict.get(icao, icao)
-    taf_types = list(TAF_TYPES_PLOT.items())
 
     for param in PARAMS:
 
@@ -823,80 +867,85 @@ def confusion_plot(all_stats, icao, icao_dict):
         cat_labels = [TAF_CATS[param][cat]
                       for cat in range(1, NUM_CATS[param] + 1)]
 
-        # One subplot per TAF type, stacked vertically
-        fig, axes = plt.subplots(len(taf_types), 1,
-                                 figsize=(9, 7 * len(taf_types)))
-        if len(taf_types) == 1:
-            axes = [axes]
+        for type_group in PLOT_TYPE_GROUPS:
+            group_titles = get_group_taf_titles(type_group)
+            taf_types = [(short, group_titles[short]) for short in type_group]
 
-        for ax, (short, name) in zip(axes, taf_types):
+            # One subplot per TAF type, stacked vertically.
+            fig, axes = plt.subplots(
+                len(taf_types), 1, figsize=(9, 4.5 * len(taf_types)))
+            if len(taf_types) == 1:
+                axes = [axes]
 
-            ct = i_stats.get(f'ct_{short}')
-            if ct is None:
-                ax.axis('off')
-                continue
+            for ax, (short, name) in zip(axes, taf_types):
+                ct = i_stats.get(f'ct_{short}')
+                if ct is None:
+                    ax.axis('off')
+                    continue
 
-            # Forecast (rows) vs observed (columns) contingency table.
-            # add_cts stores values indexed [observed][forecast], so the
-            # transpose gives forecast-by-observed.
-            mat = np.array(ct).T
-            ct_df = pd.DataFrame(mat, index=cat_labels, columns=cat_labels)
+                # add_cts stores [observed][forecast], so transpose for
+                # forecast rows and observed columns.
+                mat = np.array(ct).T
+                ct_df = pd.DataFrame(mat, index=cat_labels,
+                                     columns=cat_labels)
 
-            # Add marginal totals
-            ct_df.loc['Total Obs'] = ct_df.sum()
-            ct_df['Total Fcsts'] = ct_df.sum(axis=1)
+                # Add marginal totals.
+                ct_df.loc['Total Obs'] = ct_df.sum()
+                ct_df['Total Fcsts'] = ct_df.sum(axis=1)
 
-            fc_labels = cat_labels + ['Total Obs']
-            ob_labels = cat_labels + ['Total Fcsts']
+                fc_labels = cat_labels + ['Total Obs']
+                ob_labels = cat_labels + ['Total Fcsts']
 
-            # Mask the totals row/column so they are not colour-shaded
-            mask = np.zeros_like(ct_df, dtype=bool)
-            mask[-1, :] = True
-            mask[:, -1] = True
-            ax.set_facecolor('white')
+                # Exclude totals from the heatmap shading.
+                mask = np.zeros_like(ct_df, dtype=bool)
+                mask[-1, :] = True
+                mask[:, -1] = True
+                ax.set_facecolor('white')
+                sns.heatmap(ct_df, annot=False, cmap='Blues', cbar=False,
+                            mask=mask, ax=ax, xticklabels=ob_labels,
+                            yticklabels=fc_labels)
 
-            # Plot heatmap (colour only the main table)
-            sns.heatmap(ct_df, annot=False, cmap='Blues', cbar=False,
-                        mask=mask, ax=ax, xticklabels=ob_labels,
-                        yticklabels=fc_labels)
+                # Annotate every cell, using contrast against the heatmap.
+                nrows, ncols = ct_df.shape
+                max_val = ct_df.iloc[:-1, :-1].values.max()
+                for i in range(nrows):
+                    for j in range(ncols):
+                        val = ct_df.iloc[i, j]
+                        is_total = (i == nrows - 1) or (j == ncols - 1)
+                        if is_total:
+                            text_color = 'black'
+                        else:
+                            text_color = 'white' if val > max_val * 0.5 \
+                                else 'black'
+                        ax.text(j + 0.5, i + 0.5, f'{val:.0f}',
+                                ha='center', va='center', color=text_color)
 
-            # Annotate every cell, choosing text colour for contrast
-            nrows, ncols = ct_df.shape
-            max_val = ct_df.iloc[:-1, :-1].values.max()
-            for i in range(nrows):
-                for j in range(ncols):
-                    val = ct_df.iloc[i, j]
-                    is_total = (i == nrows - 1) or (j == ncols - 1)
-                    if is_total:
-                        text_color = 'black'
-                    else:
-                        text_color = 'white' if val > max_val * 0.5 \
-                            else 'black'
-                    ax.text(j + 0.5, i + 0.5, f'{val:.0f}', ha='center',
-                            va='center', color=text_color)
+                # Labels and title.
+                ax.set_xticklabels(ax.get_xticklabels(), rotation=45,
+                                   ha='right')
+                ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+                ax.set_xlabel('Observed Category', fontsize=14,
+                               weight='bold')
+                ax.set_ylabel('Forecast Category', fontsize=14,
+                               weight='bold')
+                ax.set_title(name, fontsize=16, weight='bold')
 
-            # Labels and title
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-            ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
-            ax.set_xlabel('Observed Category', fontsize=14, weight='bold')
-            ax.set_ylabel('Forecast Category', fontsize=14, weight='bold')
-            ax.set_title(name, fontsize=16, weight='bold')
+                # Border around the totals row and column.
+                ax.add_patch(plt.Rectangle((ct_df.shape[1] - 1, 0), 1,
+                                           ct_df.shape[0], fill=False,
+                                           edgecolor='black', lw=2))
+                ax.add_patch(plt.Rectangle((0, ct_df.shape[0] - 1),
+                                           ct_df.shape[1], 1, fill=False,
+                                           edgecolor='black', lw=2))
 
-            # Black border around the totals row and column
-            ax.add_patch(plt.Rectangle((ct_df.shape[1] - 1, 0), 1,
-                                       ct_df.shape[0], fill=False,
-                                       edgecolor='black', lw=2))
-            ax.add_patch(plt.Rectangle((0, ct_df.shape[0] - 1),
-                                       ct_df.shape[1], 1, fill=False,
-                                       edgecolor='black', lw=2))
-
-        fig.suptitle(f'{airport_name} ({icao}) \u2013 {PARAMS[param]} '
-                     'Contingency Tables', fontsize=18, weight='bold')
-        fig.tight_layout(rect=[0, 0, 1, 0.99])
-        fname = (f'{PLOTS_DIR}/confusion_plots/{icao}_{param}_confusion'
-                 f'_{TAF_TYPES_FNAME}.png')
-        fig.savefig(fname)
-        plt.close()
+            fig.suptitle(f'{airport_name} ({icao}) \u2013 {PARAMS[param]} '
+                         'Contingency Tables', fontsize=18, weight='bold')
+            fig.tight_layout(rect=[0, 0, 1, 0.99])
+            group_fname = '_'.join(type_group)
+            fname = (f'{PLOTS_DIR}/confusion_plots/{icao}_{param}_'
+                     f'confusion_{group_fname}.png')
+            fig.savefig(fname)
+            plt.close()
 
 
 def rel_freq_plot(param, stats_dict):
@@ -1029,69 +1078,67 @@ def sp_box_plot(stats_dict, param):
         plot_stats (pd.DataFrame): DataFrame of Peirce Skill Scores for
                                    each category
     """
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 6))
-
     # For collecting stats
     t_stats = {cat: {t_type: [] for t_type in TAF_TYPES_PLOT.values()}
                for cat in range(1, NUM_CATS[param] + 1)}
-    p_stats = {'Peirce Skill Score': [], 'Category': [], 'TAF Type': []}
 
-    # Loop through each airport
+    # Preserve the full-profile return value independently of the grouped
+    # figures below.
     for icao in stats_dict:
-
-        # Loop through TAF categories
         for cat in range(1, NUM_CATS[param] + 1):
-
-            # Get scores for all TAF types
-            sp_scores = {t_name: stats_dict[icao][f'sp_{taf_type}_{cat}'] 
+            sp_scores = {t_name: stats_dict[icao][f'sp_{taf_type}_{cat}']
                          for taf_type, t_name in TAF_TYPES_PLOT.items()}
-
-            # Continue to next category if any scores are NaN
-            if any([math.isnan(score) for score in sp_scores.values()]):
+            if any(math.isnan(score) for score in sp_scores.values()):
                 continue
-
-            # Loop though TAF types and add to dictionaries
             for t_name, sp_score in sp_scores.items():
                 t_stats[cat][t_name].append(sp_score)
-                p_stats['Peirce Skill Score'].append(sp_score)
-                p_stats['Category'].append(cat)
-                p_stats['TAF Type'].append(t_name)
 
-    # Create dataframe from data
-    plot_stats = pd.DataFrame(p_stats)
+    for type_group in PLOT_TYPE_GROUPS:
+        group_types = get_group_taf_titles(type_group)
+        p_stats = {'Peirce Skill Score': [], 'Category': [], 'TAF Type': []}
 
-    # Map categories to names in CATS dictionary
-    plot_stats['Category'] = plot_stats['Category'].map(TAF_CATS[param])
+        for icao in stats_dict:
+            for cat in range(1, NUM_CATS[param] + 1):
+                sp_scores = {
+                    taf_type: stats_dict[icao][f'sp_{taf_type}_{cat}']
+                    for taf_type in group_types
+                }
+                if any(math.isnan(score) for score in sp_scores.values()):
+                    continue
 
-    # # Remove rows with Random Forest
-    # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
+                for taf_type, score in sp_scores.items():
+                    p_stats['Peirce Skill Score'].append(score)
+                    p_stats['Category'].append(cat)
+                    p_stats['TAF Type'].append(group_types[taf_type])
 
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(15, 6))
+        plot_stats = pd.DataFrame(p_stats)
+        plot_stats['Category'] = plot_stats['Category'].map(TAF_CATS[param])
+        fig, ax = plt.subplots(figsize=(15, 6))
+        sp_box = sns.boxplot(
+            data=plot_stats, x='Category', y='Peirce Skill Score',
+            hue='TAF Type', hue_order=list(group_types.values()),
+            showfliers=False, ax=ax)
 
-    # Create box plot
-    sp_box = sns.boxplot(data=plot_stats, x='Category', y='Peirce Skill Score',
-                         hue='TAF Type', showfliers=False, ax=ax)
+        # Add vertical lines separating categories
+        for cat in range(1, NUM_CATS[param]):
+            ax.axvline(cat - 0.5, color='white', linestyle='--', alpha=0.5)
 
-    # Add vertical lines separating categories
-    for cat in range(1, NUM_CATS[param]):
-        ax.axvline(cat - 0.5, color='white', linestyle='--', alpha=0.5)
+        # Formatting, etc
+        ax.set_title(f'{PARAMS[param]} Peirce Skill Scores', weight='bold')
+        ax.set_xlabel('TAF Category', weight='bold')
+        ax.set_ylabel('Peirce Skill Score', weight='bold')
+        ax.tick_params(axis='x', labelsize=15)
+        sns.move_legend(ax, 'upper left', bbox_to_anchor=(1, 1), fontsize=9)
+        plt.setp(sp_box.get_legend().get_title(), weight='bold')
+        plt.setp(ax.get_xticklabels(), fontsize=13)
 
-    # Formatting, etc
-    ax.set_title(f'{PARAMS[param]} Peirce Skill Scores', weight='bold')
-    ax.set_xlabel('TAF Category', weight='bold')
-    ax.set_ylabel('Peirce Skill Score', weight='bold')
-    ax.tick_params(axis='x', labelsize=15)
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1), fontsize=14)
-    plt.setp(sp_box.get_legend().get_title(), weight='bold')
-    plt.setp(ax.get_xticklabels(), fontsize=13)
-
-    # Save and close figure
-    plt.tight_layout()
-    fig.savefig(f'{PLOTS_DIR}/sp_plots/{param}_sp_box_plot_{TAF_TYPES_FNAME}'
-                '.png')
-    plt.close()
+        # Save and close figure
+        plt.tight_layout()
+        group_fname = '_'.join(type_group)
+        fig.savefig(
+            f'{PLOTS_DIR}/sp_plots/{param}_sp_box_plot_{group_fname}.png',
+            bbox_inches='tight')
+        plt.close()
 
     return t_stats
 
@@ -1107,84 +1154,63 @@ def g_box_plot(all_stats):
         plot_stats (pd.DataFrame): DataFrame of Peirce Skill Scores for
                                    each category
     """
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # For collecting stats
     t_stats = {'vis': {t_type: [] for t_type in TAF_TYPES_PLOT.values()},
                'clb': {t_type: [] for t_type in TAF_TYPES_PLOT.values()}}
-    p_stats = {'Sharpe GSS': [], 'Parameter': [], 'TAF Type': []}
 
-    # Loop through parameters
-    for param in PARAMS:
+    for type_group in PLOT_TYPE_GROUPS:
+        group_types = get_group_taf_titles(type_group)
+        p_stats = {'Sharpe GSS': [], 'Parameter': [], 'TAF Type': []}
 
-        # Get parameter stats dict
-        stats_dict = all_stats[param]
+        # Collect scores in the requested order, omitting airports with
+        # incomplete data for this comparison group.
+        for param in PARAMS:
+            stats_dict = all_stats[param]
+            for icao in stats_dict:
+                g_scores = {
+                    taf_type: stats_dict[icao][f'g_{taf_type}']
+                    for taf_type in group_types
+                }
+                if any(math.isnan(score) for score in g_scores.values()):
+                    continue
 
-        # Loop through each airport
-        for icao in stats_dict:
+                for taf_type, score in g_scores.items():
+                    t_name = group_types[taf_type]
+                    t_stats[param][TAF_TYPES_PLOT[taf_type]].append(score)
+                    p_stats['Sharpe GSS'].append(score)
+                    p_stats['Parameter'].append(PARAMS[param])
+                    p_stats['TAF Type'].append(t_name)
 
-            # Get scores for all TAF types
-            g_scores = {t_name: stats_dict[icao][f'g_{taf_type}'] 
-                        for taf_type, t_name in TAF_TYPES_PLOT.items()}
-            
-            # Continue to next ICAO if any scores are NaN
-            if any([math.isnan(score) for score in g_scores.values()]):
-                continue
+        plot_stats = pd.DataFrame(p_stats)
+        fig, ax = plt.subplots(figsize=(12, 6))
+        g_box = sns.boxplot(
+            data=plot_stats, x='Parameter', y='Sharpe GSS', hue='TAF Type',
+            hue_order=list(group_types.values()), ax=ax)
 
-            # Loop though TAF types and add to dictionaries
-            for t_name, g_score in g_scores.items():
-                t_stats[param][t_name].append(g_score)
-                p_stats['Sharpe GSS'].append(g_score)
-                p_stats['Parameter'].append(PARAMS[param])
-                p_stats['TAF Type'].append(t_name)
+        # Add vertical line separating parameters.
+        ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
 
-    # Create dataframe from data
-    plot_stats = pd.DataFrame(p_stats)
+        # Add dashed target lines for CAA targets.
+        for t_type, (target, colour, label) in TARGETS.items():
+            if 'vis' in t_type:
+                ax.axhline(y=target, xmin=0, xmax=0.5, linestyle='--',
+                           color=colour, alpha=0.7, label=label)
+            else:
+                ax.axhline(y=target, xmin=0.5, xmax=1, linestyle='--',
+                           color=colour, alpha=0.7, label=label)
 
-    # # Remove rows with Random Forest
-    # plot_stats = plot_stats[~plot_stats['TAF Type'].str.contains('Random')]
+        # Formatting, etc
+        ax.set_xlabel('Parameter', weight='bold')
+        ax.set_ylabel('Gerrity Skill Score', weight='bold')
+        ax.tick_params(axis='x', labelsize=15)
+        sns.move_legend(ax, 'upper left', bbox_to_anchor=(1, 1), fontsize=10)
+        plt.setp(g_box.get_legend().get_title(), weight='bold')
 
-    # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    # Create box plot
-    g_box = sns.boxplot(data=plot_stats, x='Parameter', 
-                        y='Sharpe GSS', hue='TAF Type', ax=ax)
-
-    # Add vertical line separating parameter
-    ax.axvline(0.5, color='white', linestyle='--', alpha=0.5)
-
-    # Add dashed target lines, shading and text for CAA targets
-    target_handles = []
-    for t_type, target_vals in TARGETS.items():
-        target, colour, label = target_vals
-        if 'vis' in t_type: 
-            handle = ax.axhline(y=target, xmin=0, xmax=0.5, linestyle='--', 
-                                color=colour, alpha=0.7, label=label)
-        else:
-            handle = ax.axhline(y=target, xmin=0.5, xmax=1, linestyle='--', 
-                                color=colour, alpha=0.7, label=label)
-        target_handles.append(handle)
-
-    # Add target lines to legend
-    handles, labels = ax.get_legend_handles_labels()
-    handles += target_handles
-    # labels += [TARGETS[t_type][2] for t_type in TARGETS]
-    ax.legend(handles=handles, labels=labels, loc='upper center', ncol=2, 
-              fontsize=10, bbox_to_anchor=(1.45, 1.0))
-
-    # Formatting, etc
-    ax.set_xlabel('Parameter', weight='bold')
-    ax.set_ylabel('Gerrity Skill Score', weight='bold')
-    ax.tick_params(axis='x', labelsize=15)
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-    plt.setp(g_box.get_legend().get_title(), weight='bold')
-
-    # Save and close figure
-    plt.tight_layout()
-    fig.savefig(f'{PLOTS_DIR}/g_plots/g_box_plot_{TAF_TYPES_FNAME}.png')
-    plt.close()
+        # Save and close figure
+        plt.tight_layout()
+        group_fname = '_'.join(type_group)
+        fig.savefig(f'{PLOTS_DIR}/g_plots/g_box_plot_{group_fname}.png',
+                    bbox_inches='tight')
+        plt.close()
 
     return t_stats
 
