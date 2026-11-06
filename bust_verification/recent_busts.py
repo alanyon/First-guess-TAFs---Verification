@@ -24,6 +24,7 @@ import csv
 import itertools
 import os
 import pickle
+import re
 import subprocess
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -39,6 +40,7 @@ from taf_monitor.time_functionality import ConstructTimeObject
 CYCLE_TIME = os.environ['CYCLE_TIME']
 OUTDIR = os.environ['OUTDIR']
 DATADIR = os.environ['DATA_DIR']
+VERIF_START = datetime.strptime(os.environ['VERIF_START'], '%Y%m%d')
 METDB_EMAIL = 'andre.lanyon@metoffice.gov.uk'
 TAF_INFO_CSV = ('/home/users/andre.lanyon/first_guess_tafs/'
                 'First-guess-TAFs---Verification/standard_verification/'
@@ -70,19 +72,22 @@ def _load_taf_freqs(path):
 # issued) window
 TAF_FREQS = _load_taf_freqs(TAF_INFO_CSV)
 TAF_TYPES = {
-    'auto_opt': 'Optimistic Auto TAFs (no ML)',
-    'auto_opt_up_1': 'Optimistic Auto TAFs (no ML) - Obs Update 1',
-    'auto_opt_up_2': 'Optimistic Auto TAFs (no ML) - Obs Update 2',
-    'auto_opt_ml': 'Optimistic Auto TAFs (with ML)',
-    'auto_opt_ml_up_1': 'Optimistic Auto TAFs (with ML) - Obs Update 1', 
-    'auto_opt_ml_up_2': 'Optimistic Auto TAFs (with ML) - Obs Update 2',
-    'auto_pes': 'Pessimistic Auto TAFs (no ML)', 
-    'auto_pes_up_1': 'Pessimistic Auto TAFs (no ML) - Obs Update 1',
-    'auto_pes_up_2': 'Pessimistic Auto TAFs (no ML) - Obs Update 2',
-    'auto_pes_ml': 'Pessimistic Auto TAFs (with ML)',
-    'auto_pes_ml_up_1': 'Pessimistic Auto TAFs (with ML) - Obs Update 1',
-    'auto_pes_ml_up_2': 'Pessimistic Auto TAFs (with ML) - Obs Update 2',
+    'auto': 'Auto TAFs (no ML)',
+    'auto_up_1': 'Auto TAFs (no ML) - Obs Update 1',
+    'auto_up_2': 'Auto TAFs (no ML) - Obs Update 2',
+    'auto_ml': 'Auto TAFs (with ML)',
+    'auto_ml_up_1': 'Auto TAFs (with ML) - Obs Update 1',
+    'auto_ml_up_2': 'Auto TAFs (with ML) - Obs Update 2',
     'man': 'Manual'
+}
+# Auto TAF verification file suffix for each Auto TAF type
+AUTO_FILES = {
+    'auto': 'mix_no_obs',
+    'auto_up_1': 'mix_obs_update_1',
+    'auto_up_2': 'mix_obs_update_2',
+    'auto_ml': 'mix_no_obs_ml',
+    'auto_ml_up_1': 'mix_obs_update_1_ml',
+    'auto_ml_up_2': 'mix_obs_update_2_ml'
 }
 WB_TYPES = ['increase', 'decrease', 'dir', 'all']
 B_TYPES = ['increase', 'decrease', 'both', 'all']
@@ -98,6 +103,12 @@ def main():
     """
     Main function calling all other functions.
     """
+    # Mix Auto TAFs are only available from VERIF_START
+    cycle_dt = datetime.strptime(CYCLE_TIME, '%Y%m%d%H')
+    if cycle_dt - timedelta(hours=48) < VERIF_START:
+        print(f'TAFs before {VERIF_START:%Y%m%d} not verified. Exiting...')
+        return
+
     # Get dictionaries, etc
     holders, icao_dict = get_dicts()
 
@@ -111,34 +122,14 @@ def main():
     for taf_hr in ['00', '03', '06', '09', '12', '15', '18', '21']:
 
         # Read Auto TAFs from txt files
-        auto_tafs_opt = get_auto_tafs(taf_dir, taf_hr, 'opt_no_obs')
-        auto_tafs_opt_up_1 = get_auto_tafs(taf_dir, taf_hr, 'opt_obs_update_1')
-        auto_tafs_opt_up_2 = get_auto_tafs(taf_dir, taf_hr, 'opt_obs_update_2')
-        auto_tafs_opt_ml = get_auto_tafs(taf_dir, taf_hr, 'opt_no_obs_ml')
-        auto_tafs_opt_ml_up_1 = get_auto_tafs(taf_dir, taf_hr, 
-                                              'opt_obs_update_1_ml')
-        auto_tafs_opt_ml_up_2 = get_auto_tafs(taf_dir, taf_hr, 
-                                              'opt_obs_update_2_ml')
-        auto_tafs_pes = get_auto_tafs(taf_dir, taf_hr, 'pes_no_obs')
-        auto_tafs_pes_up_1 = get_auto_tafs(taf_dir, taf_hr, 'pes_obs_update_1')
-        auto_tafs_pes_up_2 = get_auto_tafs(taf_dir, taf_hr, 'pes_obs_update_2')
-        auto_tafs_pes_ml = get_auto_tafs(taf_dir, taf_hr, 'pes_no_obs_ml')
-        auto_tafs_pes_ml_up_1 = get_auto_tafs(taf_dir, taf_hr, 
-                                              'pes_obs_update_1_ml')
-        auto_tafs_pes_ml_up_2 = get_auto_tafs(taf_dir, taf_hr, 
-                                              'pes_obs_update_2_ml')
+        auto_tafs = {t_type: get_auto_tafs(taf_dir, taf_hr, auto_file)
+                     for t_type, auto_file in AUTO_FILES.items()}
 
         # Loop through required ICAOs
         for icao in icao_dict:
 
             # Get TAFs for ICAO and start time
-            icao_tafs = get_icao_tafs(
-                icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2, 
-                auto_tafs_opt_ml, auto_tafs_opt_ml_up_1, auto_tafs_opt_ml_up_2, 
-                auto_tafs_pes, auto_tafs_pes_up_1, auto_tafs_pes_up_2, 
-                auto_tafs_pes_ml, auto_tafs_pes_ml_up_1, auto_tafs_pes_ml_up_2, 
-                man_tafs
-            )
+            icao_tafs = get_icao_tafs(icao, auto_tafs, man_tafs)
 
             # Move on if no TAFs found
             if not icao_tafs:
@@ -313,76 +304,26 @@ def get_icao_metars(all_metars, all_specis, icao, taf_start_dt, icao_tafs):
     return metars, start, end
 
 
-def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2, 
-                  auto_tafs_opt_ml, auto_tafs_opt_ml_up_1, 
-                  auto_tafs_opt_ml_up_2, auto_tafs_pes, auto_tafs_pes_up_1, 
-                  auto_tafs_pes_up_2, auto_tafs_pes_ml, auto_tafs_pes_ml_up_1, 
-                  auto_tafs_pes_ml_up_2, man_tafs):
+def get_icao_tafs(icao, auto_tafs, man_tafs):
     """
     Gets TAFs for specified ICAO and TAF start time.
 
     Args:
         icao (str): ICAO to get TAFs for
-        auto_tafs_opt (list): List of Auto TAFs without ML
-        auto_tafs_opt_up_1 (list): List of Auto TAFs without ML - Update 1
-        auto_tafs_opt_up_2 (list): List of Auto TAFs without ML - Update 2
-        auto_tafs_opt_ml (list): List of Auto TAFs with ML
-        auto_tafs_opt_ml_up_1 (list): List of Auto TAFs with ML - Update 1
-        auto_tafs_opt_ml_up_2 (list): List of Auto TAFs with ML - Update 2
-        auto_tafs_pes (list): List of Auto TAFs PES
-        auto_tafs_pes_up_1 (list): List of Auto TAFs PES - Update 1
-        auto_tafs_pes_up_2 (list): List of Auto TAFs PES - Update 2
-        auto_tafs_pes_ml (list): List of Auto TAFs PES with ML
-        auto_tafs_pes_ml_up_1 (list): List of Auto TAFs PES with ML - Update 1
-        auto_tafs_pes_ml_up_2 (list): List of Auto TAFs PES with ML - Update 2
+        auto_tafs (dict): List of Auto TAF lines for each Auto TAF type
         man_tafs (list): List of manual TAFs
     Returns:
         matched_tafs (dict): Dictionary of matched TAFs (or None)
     """
-    # Get Auto TAFs for ICAO
-    icao_auto_tafs_opt = [row for row in auto_tafs_opt if icao in row]
-    icao_auto_tafs_opt_up_1 = [row for row in auto_tafs_opt_up_1 
-                               if icao in row]
-    icao_auto_tafs_opt_up_2 = [row for row in auto_tafs_opt_up_2 
-                               if icao in row]
-    icao_auto_tafs_opt_ml = [row for row in auto_tafs_opt_ml if icao in row]
-    icao_auto_tafs_opt_ml_up_1 = [row for row in auto_tafs_opt_ml_up_1 
-                                  if icao in row]
-    icao_auto_tafs_opt_ml_up_2 = [row for row in auto_tafs_opt_ml_up_2 
-                                  if icao in row]
-    icao_auto_tafs_pes = [row for row in auto_tafs_pes if icao in row]
-    icao_auto_tafs_pes_up_1 = [row for row in auto_tafs_pes_up_1 
-                               if icao in row]
-    icao_auto_tafs_pes_up_2 = [row for row in auto_tafs_pes_up_2 
-                               if icao in row]
-    icao_auto_tafs_pes_ml = [row for row in auto_tafs_pes_ml if icao in row]
-    icao_auto_tafs_pes_ml_up_1 = [row for row in auto_tafs_pes_ml_up_1 
-                                  if icao in row]  
-    icao_auto_tafs_pes_ml_up_2 = [row for row in auto_tafs_pes_ml_up_2 
-                                  if icao in row]
+    # Get Auto TAFs for ICAO, returning None if any type is missing
+    icao_auto_tafs = {}
+    for t_type, t_tafs in auto_tafs.items():
+        rows = [row for row in t_tafs if icao in row]
+        if not rows:
+            return None
 
-    # Return None if no Auto TAFs found
-    if any([not icao_auto_tafs_opt, not icao_auto_tafs_opt_up_1, 
-            not icao_auto_tafs_opt_up_2, not icao_auto_tafs_opt_ml, 
-            not icao_auto_tafs_opt_ml_up_1, not icao_auto_tafs_opt_ml_up_2,
-            not icao_auto_tafs_pes, not icao_auto_tafs_pes_up_1, 
-            not icao_auto_tafs_pes_up_2, not icao_auto_tafs_pes_ml, 
-            not icao_auto_tafs_pes_ml_up_1, not icao_auto_tafs_pes_ml_up_2]):
-        return None
-
-    # Should only be one Auto TAF per ICAO per TAF start time
-    icao_auto_taf_opt = icao_auto_tafs_opt[0][46:].split()
-    icao_auto_taf_opt_up_1 = icao_auto_tafs_opt_up_1[0][46:].split()
-    icao_auto_taf_opt_up_2 = icao_auto_tafs_opt_up_2[0][46:].split()
-    icao_auto_taf_opt_ml = icao_auto_tafs_opt_ml[0][46:].split()
-    icao_auto_taf_opt_ml_up_1 = icao_auto_tafs_opt_ml_up_1[0][46:].split()
-    icao_auto_taf_opt_ml_up_2 = icao_auto_tafs_opt_ml_up_2[0][46:].split()
-    icao_auto_taf_pes = icao_auto_tafs_pes[0][46:].split()
-    icao_auto_taf_pes_up_1 = icao_auto_tafs_pes_up_1[0][46:].split()
-    icao_auto_taf_pes_up_2 = icao_auto_tafs_pes_up_2[0][46:].split()
-    icao_auto_taf_pes_ml = icao_auto_tafs_pes_ml[0][46:].split()
-    icao_auto_taf_pes_ml_up_1 = icao_auto_tafs_pes_ml_up_1[0][46:].split()
-    icao_auto_taf_pes_ml_up_2 = icao_auto_tafs_pes_ml_up_2[0][46:].split()
+        # Should only be one Auto TAF per ICAO per TAF start time
+        icao_auto_tafs[t_type] = rows[0][46:].split()
 
     # Get manual TAFs for ICAO
     icao_man_tafs = [str(row['TAF_RPT_TXT'], 'utf-8').strip().split()
@@ -401,28 +342,8 @@ def get_icao_tafs(icao, auto_tafs_opt, auto_tafs_opt_up_1, auto_tafs_opt_up_2,
             continue
 
         # If start and finish times match, consider TAFs matched
-        if (man_taf[2] == icao_auto_taf_opt[2] == icao_auto_taf_opt_up_1[2] == 
-            icao_auto_taf_opt_up_2[2] == icao_auto_taf_opt_ml[2] == 
-            icao_auto_taf_opt_ml_up_1[2] == icao_auto_taf_opt_ml_up_2[2] ==
-            icao_auto_taf_pes[2] == icao_auto_taf_pes_up_1[2] == 
-            icao_auto_taf_pes_up_2[2] == icao_auto_taf_pes_ml[2] ==
-            icao_auto_taf_pes_ml_up_1[2] == icao_auto_taf_pes_ml_up_2[2]):
-
-            # Collect into dictionary and return
-            matched_tafs = {'auto_opt': icao_auto_taf_opt, 
-                            'auto_opt_up_1': icao_auto_taf_opt_up_1,
-                            'auto_opt_up_2': icao_auto_taf_opt_up_2,
-                            'auto_opt_ml': icao_auto_taf_opt_ml,
-                            'auto_opt_ml_up_1': icao_auto_taf_opt_ml_up_1,
-                            'auto_opt_ml_up_2': icao_auto_taf_opt_ml_up_2,
-                            'auto_pes': icao_auto_taf_pes,
-                            'auto_pes_up_1': icao_auto_taf_pes_up_1,
-                            'auto_pes_up_2': icao_auto_taf_pes_up_2,
-                            'auto_pes_ml': icao_auto_taf_pes_ml,
-                            'auto_pes_ml_up_1': icao_auto_taf_pes_ml_up_1,
-                            'auto_pes_ml_up_2': icao_auto_taf_pes_ml_up_2,
-                            'man': man_taf}
-            return matched_tafs
+        if all(man_taf[2] == taf[2] for taf in icao_auto_tafs.values()):
+            return {**icao_auto_tafs, 'man': man_taf}
 
     # If no manual TAF found, return None
     return None
@@ -658,36 +579,44 @@ def taf_str(taf_lst):
 
 def update_html(date, fname):
     """
-    Updates html file displaying bust output.
+    Adds a date to the dates dropdown of the html file displaying bust
+    output, selects it and changes the files first shown to that date.
 
     Args:
-        date (str): Date of TAFs
+        date (str): Date of TAFs (YYYYMMDD)
         fname (str): Filename of html file to update
     Returns:
         None
     """
-    # Read in existing file, getting 2 lists of lines from the file, split
-    # where an extra line is required
-    with open(fname, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-    first_lines = lines[:-79]
-    last_lines = lines[-79:]
+    with open(fname, 'r', encoding='utf-8') as f_obj:
+        html = f_obj.read()
 
-    # Edit html file and append/edit the required lines
-    first_lines[-1] = first_lines[-1].replace(' selected="selected"', '')
-    first_lines.append('                    <option selected="selected" '
-                       f'value="{date}">{date}</option>\n')
-    last_lines[-67] = last_lines[-67].replace(last_lines[-67][31:39], date)
-    last_lines[-55] = last_lines[-55].replace(last_lines[-55][31:39], date)
-    last_lines[-19] = last_lines[-19].replace(last_lines[-19][31:39], date)
+    # Get the dates that can already be chosen
+    match = re.search(r'(<select[^>]*id="datesDropdown"[^>]*>)(.*?)'
+                      r'(\s*</select>)', html, re.DOTALL)
+    if not match:
+        raise ValueError(f'Dates dropdown not found in {fname}')
+    dates = sorted(set(re.findall(r'value="(\d{8})"', match.group(2)))
+                   | {date})
 
-    # Concatenate the lists together
-    new_lines = first_lines + last_lines
+    # Replace the dates with all dates, selecting the latest
+    options = ''.join(
+        f'\n                    <option{selected} value="{day}">{day}'
+        '</option>'
+        for day, selected in zip(dates, [''] * (len(dates) - 1)
+                                 + [' selected="selected"']))
+    html = html[:match.start(2)] + options + html[match.end(2):]
 
-    # Re-write the lines to a new file
-    with open(fname, 'w', encoding='utf-8') as o_file:
-        for line in new_lines:
-            o_file.write(line)
+    # Change the files first shown to be for the latest date
+    html = re.sub(r'(src="\.\./output/)\d{8}(/)',
+                  lambda mtch: f'{mtch.group(1)}{dates[-1]}{mtch.group(2)}',
+                  html)
+
+    # Write the page to a temporary file first
+    tmp_file = f'{fname}.tmp'
+    with open(tmp_file, 'w', encoding='utf-8') as f_obj:
+        f_obj.write(html)
+    os.replace(tmp_file, fname)
 
 
 def update_infos(holders, icao, icao_tafs, icao_busts):

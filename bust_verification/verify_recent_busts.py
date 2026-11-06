@@ -14,19 +14,14 @@ import pandas as pd
 DATADIR = os.environ['DATA_DIR']
 PLOT_DIR = os.environ['PLOT_DIR']
 TAF_INFO_CSV = os.environ['TAF_INFO_CSV']
+VERIF_START = datetime.strptime(os.environ['VERIF_START'], '%Y%m%d')
 TAF_TYPES = {
-    'auto_opt': 'Optimistic Auto TAFs\n(no ML)',
-    'auto_opt_up_1': 'Optimistic Auto TAFs\n(no ML) - Obs Update 1',
-    'auto_opt_up_2': 'Optimistic Auto TAFs\n(no ML) - Obs Update 2',
-    'auto_opt_ml': 'Optimistic Auto TAFs\n(with ML)',
-    'auto_opt_ml_up_1': 'Optimistic Auto TAFs\n(with ML) - Obs Update 1', 
-    'auto_opt_ml_up_2': 'Optimistic Auto TAFs\n(with ML) - Obs Update 2',
-    'auto_pes': 'Pessimistic Auto TAFs\n(no ML)', 
-    'auto_pes_up_1': 'Pessimistic Auto TAFs\n(no ML) - Obs Update 1',
-    'auto_pes_up_2': 'Pessimistic Auto TAFs\n(no ML) - Obs Update 2',
-    'auto_pes_ml': 'Pessimistic Auto TAFs\n(with ML)',
-    'auto_pes_ml_up_1': 'Pessimistic Auto TAFs\n(with ML) - Obs Update 1',
-    'auto_pes_ml_up_2': 'Pessimistic Auto TAFs\n(with ML) - Obs Update 2',
+    'auto': 'Auto TAFs\n(no ML)',
+    'auto_up_1': 'Auto TAFs\n(no ML) - Obs Update 1',
+    'auto_up_2': 'Auto TAFs\n(no ML) - Obs Update 2',
+    'auto_ml': 'Auto TAFs\n(with ML)',
+    'auto_ml_up_1': 'Auto TAFs\n(with ML) - Obs Update 1',
+    'auto_ml_up_2': 'Auto TAFs\n(with ML) - Obs Update 2',
     'man': 'Manual'
 }
 BUST_TYPES = {'vis': 'Visibility Busts', 'cld': 'Cloud Busts', 
@@ -53,8 +48,12 @@ def main():
     # Loop through files in the data directory
     for filename in os.listdir(DATADIR):
 
-        # Get the date from the filename and add to list
-        vdts.append(datetime.strptime(filename, '%Y%m%d.pkl'))
+        # Only use days from the start of the verification period (older
+        # files have different TAF types)
+        vdt = datetime.strptime(filename, '%Y%m%d.pkl')
+        if vdt < VERIF_START:
+            continue
+        vdts.append(vdt)
 
         # Unpickle the file
         with open(os.path.join(DATADIR, filename), 'rb') as f:
@@ -75,6 +74,10 @@ def main():
             else:
                 icao_stats[icao] = deepcopy(stats)
 
+    if not vdts:
+        print(f'No bust data from {VERIF_START:%Y%m%d}. Exiting...')
+        return
+
     # Create a DataFrame from the icao stats
     big_stats = {'Airport': [], 'TAF Type': [], 'Bust Type': [], 
                  'Number of Busts': []}
@@ -90,15 +93,15 @@ def main():
     stats_df = pd.DataFrame(big_stats)
 
     # Build colour palette
-    blues6 = sample_shades('Blues', 6, low=0.30, high=0.95)
-    reds6  = sample_shades('Reds',  6, low=0.30, high=0.95)
+    blues3 = sample_shades('Blues', 3, low=0.45, high=0.95)
+    reds3 = sample_shades('Reds', 3, low=0.45, high=0.95)
     green1 = ['#2ca02c']
-    palette_13 = blues6 + reds6 + green1
+    palette_7 = blues3 + reds3 + green1
 
     # Create bar plot
     fig, ax = plt.subplots(figsize=(16, 8))
     sns.barplot(data=stats_df, x='Bust Type', y='Number of Busts',
-                hue='TAF Type', palette=palette_13, estimator=sum, 
+                hue='TAF Type', palette=palette_7, estimator=sum, 
                 errorbar=None, ax=ax)
     
     # Build title from first and last dates in vdts list
@@ -132,7 +135,7 @@ def main():
         # Create bar plot
         fig, ax = plt.subplots(figsize=(16, 8))
         sns.barplot(data=stats_df_icao, x='Bust Type', y='Number of Busts',
-                    palette=palette_13, hue='TAF Type', ax=ax)
+                    palette=palette_7, hue='TAF Type', ax=ax)
         
         # Add scores on top of bars
         for ind in ax.containers:
