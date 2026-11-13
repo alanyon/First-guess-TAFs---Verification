@@ -1,7 +1,7 @@
 """
-Module to extract recent TAFs (previous 180 days) and calculate
-verification scores for each TAF type and airport. The scores are saved
-to a CSV file for each airport.
+Module to extract AUTOTAFs and calculate rolling verification scores for
+each airport over a 36-month window. Scores are saved to a CSV file per
+airport.
 
 The work is split into two entry points so the expensive per-station
 scoring can be fanned out into parallel Cylc jobs:
@@ -14,15 +14,16 @@ Functions:
     get_date_range(): Derive the verification period from the cycle date.
     analyse_tafs(): Analyse TAFs for a given airport and TAF type.
     calc_scores(): Calculate scores for a given airport and TAF type.
-    convert_manual_tafs(): Convert manual TAFs to verification format.
-    decode_tafs(): Decode TAFs for each type, create SQLite databases.
-    get_tafs(): Extract TAFs for the given date range.
+    decode_tafs(): Incrementally decode source files into SQLite.
+    get_taf_sources(): Find archive and recent AUTOTAF source files.
     update_configs_make_dirs(): Update config files, make directories.
 
 Written by Andre Lanyon, 2026.
 """
 import argparse
 import os
+import sqlite3
+import shutil
 import subprocess
 from datetime import datetime, timedelta
 
@@ -38,19 +39,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Import environment variables
 OUT_DIR = os.environ['OUT_DIR']
 DATA_DIR = os.environ['DATA_DIR']
+CACHE_DIR = os.path.join(DATA_DIR, 'rolling_36m_autotaf')
+ARCHIVE_DIR = os.environ['ARCHIVE_DIR']
 TAF_TYPES = os.environ['TAF_TYPES'].split()
 CYCLE_DATE = os.environ['CYCLE_DATE']
 INFO_FILE = os.environ['INFO_FILE']
 AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
+ps.OUT_DIR = CACHE_DIR
 
 
 def get_date_range():
     """
     Derive the verification period from the cycle date.
 
-    The period ends the day before the cycle date and starts 180 days
-    earlier. Both the prepare and per-station steps derive the range from
-    CYCLE_DATE so they always agree without having to pass dates between
+    The period ends the day before the cycle date and starts three calendar
+    years earlier. Both the prepare and per-station steps derive the range
+    from CYCLE_DATE so they always agree without having to pass dates between
     jobs.
 
     Args:
@@ -60,7 +64,7 @@ def get_date_range():
         end_dt (datetime): End datetime for the verification period
     """
     end_dt = datetime.strptime(CYCLE_DATE, '%Y%m%d') - timedelta(days=1)
-    start_dt = end_dt - timedelta(days=180)
+    start_dt = (pd.Timestamp(end_dt) - pd.DateOffset(years=3)).to_pydatetime()
     return start_dt, end_dt
 
 
@@ -77,26 +81,19 @@ def prepare():
     Returns:
         None
     """
-    # Remove files from previous runs
-    for taf_type in TAF_TYPES:
-        os.system(f'rm -f {DATA_DIR}/{taf_type}/*')
-    os.system(f'rm -rf {DATA_DIR}/decodes/*')
-
     # Determine the verification period
     start_dt, end_dt = get_date_range()
 
-    # Get TAFs for 180 day period
-    all_tafs = get_tafs(start_dt, end_dt)
-
-    # Decode TAFs
-    decode_tafs(all_tafs)
+    # Add only new TAF source files to the persistent decoded database.
+    source_files = get_taf_sources(start_dt, end_dt)
+    decode_tafs(source_files, start_dt)
 
     # Update config files for each TAF type and make output directories
-    update_configs_make_dirs(all_tafs)
+    update_configs_make_dirs()
 
     # Ensure the contingency table directory the station jobs write to
     # exists before any of them run
-    os.makedirs(f'{DATA_DIR}/cts', exist_ok=True)
+    os.makedirs(f'{CACHE_DIR}/cts', exist_ok=True)
 
 
 def verify_station(icao):
@@ -147,10 +144,12 @@ def analyse_tafs(icao, start_dt, end_dt, length):
     for taf_type in TAF_TYPES:
 
         # Define output directories and files
-        out_dir = f'{DATA_DIR}/{taf_type}'
+        out_dir = f'{CACHE_DIR}/{taf_type}'
         vis_file = f'{out_dir}/{icao}_90_vis.nc'
         clb_file = f'{out_dir}/{icao}_90_clb.nc'
-        config_file = f'{DATA_DIR}/{taf_type}.cfg'
+        config_file = (os.path.join(SCRIPT_DIR, 'Manual.cfg')
+                   if taf_type == 'manual'
+                   else f'{CACHE_DIR}/{taf_type}.cfg')
 
         # Remove any stale NetCDF from a previous run: VerPy writes with
         # overwrite=False, so leftover files would break a rerun (e.g. a
@@ -192,18 +191,28 @@ def calc_scores(row, start_dt, end_dt):
     scores_df, cts_vis, cts_clb = match_verify(icao, start_str, end_str)
 
     # Add to csv file or create new one if it doesn't exist
-    scores_file = f'{DATA_DIR}/stats/{icao}_scores.csv'
+    scores_file = f'{CACHE_DIR}/stats/{icao}_scores.csv'
     if os.path.exists(scores_file):
         old_scores_df = pd.read_csv(scores_file)
         scores_df = pd.concat([old_scores_df, scores_df], ignore_index=True)
+    scores_df = merge_score_history(scores_df)
     scores_df.to_csv(scores_file, index=False)
 
     # Save contingency table values for plotting
     for taf_type in TAF_TYPES:
         ct_vis = cts_vis[taf_type]
         ct_clb = cts_clb[taf_type]
-        ct_vis.to_csv(f'{DATA_DIR}/cts/{icao}_ct_vis_{taf_type}.csv')
-        ct_clb.to_csv(f'{DATA_DIR}/cts/{icao}_ct_clb_{taf_type}.csv')
+        ct_vis.to_csv(f'{CACHE_DIR}/cts/{icao}_ct_vis_{taf_type}.csv')
+        ct_clb.to_csv(f'{CACHE_DIR}/cts/{icao}_ct_clb_{taf_type}.csv')
+
+
+def merge_score_history(scores):
+    """Keep one row per window end, retaining latest non-null scores."""
+    value_columns = [column for column in scores.columns if column != 'Date']
+    return scores.groupby('Date', sort=True, as_index=False).agg(
+        {column: lambda values: (values.dropna().iloc[-1]
+                                 if values.notna().any() else float('nan'))
+         for column in value_columns})
 
 
 def convert_manual_tafs(txt_file, taf_dir):
@@ -263,110 +272,124 @@ def convert_manual_tafs(txt_file, taf_dir):
     return ver_tafs
 
 
-def decode_tafs(all_tafs):
-    """
-    Decode TAFs for each TAF type and create SQLite databases.
+def get_taf_sources(start_dt, end_dt):
+    """Return historical and recent AUTOTAF source files."""
+    source_files = [
+        os.path.join(ARCHIVE_DIR, name)
+        for name in sorted(os.listdir(ARCHIVE_DIR))
+        if name.endswith('_no_p10_20_mix_all.txt')
+        and not name.startswith('EGLC_long_')]
 
-    Args:
-        all_tafs (dict): Dictionary containing TAFs for each TAF type
-    Returns:
-        None
-    """
-    # Loop through TAF types
-    for taf_type, tafs in all_tafs.items():
+    taf_date = start_dt - timedelta(days=1)
+    while taf_date <= end_dt:
+        taf_dir = os.path.join(OUT_DIR, taf_date.strftime('%Y%m%d'))
+        if os.path.isdir(taf_dir):
+            names = sorted(os.listdir(taf_dir))
+            source_files.extend(
+                os.path.join(taf_dir, name)
+                for name in names
+                if name.endswith('_verification_mix_no_obs.txt'))
+        taf_date += timedelta(days=1)
 
-        # Make directories
-        in_dir = f'{DATA_DIR}/decodes/Input_{taf_type}'
-        out_dir = f'{DATA_DIR}/decodes/Output_{taf_type}'
+    if not source_files:
+        raise FileNotFoundError('No AUTOTAF source files were found')
+    return source_files
+
+
+def decode_tafs(source_files, start_dt):
+    """Incrementally decode source files into a persistent SQLite cache."""
+    decodes_dir = os.path.join(CACHE_DIR, 'decodes')
+    os.makedirs(decodes_dir, exist_ok=True)
+    db_file = os.path.join(decodes_dir, 'autotaf.db')
+
+    cached_sources = {}
+    if os.path.exists(db_file):
+        try:
+            with sqlite3.connect(db_file) as connection:
+                cached_sources = {
+                    source: (size, mtime_ns)
+                    for source, size, mtime_ns in connection.execute(
+                        'SELECT source, size, mtime_ns FROM processed_sources')}
+        except sqlite3.Error:
+            os.remove(db_file)
+
+    source_stats = {}
+    for source in source_files:
+        stat_result = os.stat(source)
+        source_stats[source] = (stat_result.st_size, stat_result.st_mtime_ns)
+
+    changed = any(
+        source in cached_sources and cached_sources[source] != source_stats[source]
+        for source in source_files)
+    rebuild = not os.path.exists(db_file) or changed
+    if rebuild:
+        if os.path.exists(db_file):
+            os.remove(db_file)
+        cached_sources = {}
+
+    pending_sources = [
+        source for source in source_files
+        if source not in cached_sources]
+
+    if pending_sources:
+        in_dir = os.path.join(decodes_dir, 'Input_autotaf')
+        out_dir = os.path.join(decodes_dir, 'Output_autotaf')
+        stage_db = os.path.join(decodes_dir, 'autotaf_stage.db')
+        shutil.rmtree(in_dir, ignore_errors=True)
+        shutil.rmtree(out_dir, ignore_errors=True)
+        if os.path.exists(stage_db):
+            os.remove(stage_db)
         os.makedirs(in_dir)
         os.makedirs(out_dir)
 
-        # Write TAFs to input file
-        with open(f'{DATA_DIR}/decodes/Input_{taf_type}/tafs.txt', 'w',
-                  encoding='utf-8') as f:
-            f.write('\n'.join(tafs))
+        with open(os.path.join(in_dir, 'tafs.txt'), 'w',
+                  encoding='utf-8') as output:
+            for source in pending_sources:
+                with open(source, 'r', encoding='utf-8') as taf_file:
+                    shutil.copyfileobj(taf_file, output)
+                    output.write('\n')
 
-        # Convert TAFs to correct format and save to output directory
-        with open(f'{DATA_DIR}/decodes/Output_{taf_type}/out.log', 'w',
+        with open(os.path.join(out_dir, 'out.log'), 'w',
                   encoding='utf-8') as _, \
-             open(f'{DATA_DIR}/decodes/Output_{taf_type}/err.log', 'w',
+             open(os.path.join(out_dir, 'err.log'), 'w',
                   encoding='utf-8') as _:
             td.main(in_dir, out_dir)
 
-        # Create sql dSatabase
-        taf_data = f"{out_dir}/acceptedTafs.csv"
-        taf_decoded_data = f"{out_dir}/decodedTafs.csv"
-        db_file = f"{DATA_DIR}/decodes/{taf_type}.db"
-        sqlite_commands = "\n".join([
-            f".read {SCRIPT_DIR}/create_tables.sql",
+        taf_data = os.path.join(out_dir, 'acceptedTafs.csv')
+        taf_decoded_data = os.path.join(out_dir, 'decodedTafs.csv')
+        sqlite_commands = '\n'.join([
+            f'.read {SCRIPT_DIR}/create_tables.sql',
             '.separator ","',
             f'.import "{taf_data}" taf_load',
             f'.import "{taf_decoded_data}" taf_decoded_load',
-            f".read {SCRIPT_DIR}/copy_data.sql"
+            f'.read {SCRIPT_DIR}/copy_data.sql'
         ])
-        subprocess.run(["sqlite3", db_file], input=sqlite_commands, text=True,
-                       check=False)
+        subprocess.run(['sqlite3', '-bail', stage_db], input=sqlite_commands,
+                       text=True, check=True)
 
+        with sqlite3.connect(db_file) as connection:
+            cache_schema = os.path.join(SCRIPT_DIR, 'cache_tables.sql')
+            with open(cache_schema, 'r', encoding='utf-8') as schema_file:
+                connection.executescript(schema_file.read())
+            connection.execute('ATTACH DATABASE ? AS stage', (stage_db,))
+            connection.execute(
+                'INSERT OR REPLACE INTO taf_data SELECT * FROM stage.taf_data')
+            connection.execute(
+                'INSERT OR REPLACE INTO taf_decoded_data '
+                'SELECT * FROM stage.taf_decoded_data')
+            connection.executemany(
+                'INSERT OR REPLACE INTO processed_sources '
+                '(source, size, mtime_ns) VALUES (?, ?, ?)',
+                [(source, *source_stats[source]) for source in pending_sources])
+            connection.commit()
+        os.remove(stage_db)
 
-def get_tafs(taf_date, end_date):
-    """
-    Extract TAFs for the given date range and return them in a
-    dictionary.
-
-    Args:
-        taf_date (datetime): Start date for TAF extraction
-        end_date (datetime): End date for TAF extraction
-    Returns:
-        all_tafs (dict): Dictionary containing TAFs for each TAF type
-    """
-    # Create dictionary to hold TAFs
-    all_tafs = {taf_type: [] for taf_type in TAF_TYPES}
-
-    # Loop through dates from start to end
-    while taf_date <= end_date:
-
-        # Find tafs for day
-        taf_dir = f'{OUT_DIR}/{taf_date.strftime("%Y%m%d")}'
-
-        # Loop through all files in directory
-        for txt_file in os.listdir(taf_dir):
-
-            # Ignore non-txt files
-            if not txt_file.endswith('.txt'):
-                continue
-
-            # Go through verification TAF files
-            if 'verification' in txt_file:
-
-                # Read TAFs from file
-                with open(os.path.join(taf_dir, txt_file), 'r',
-                          encoding='utf-8') as f:
-                    tafs = f.read().splitlines()
-
-                # Loop through TAFs
-                for taf in tafs:
-
-                    # Get ICAO from TAF and ignore if defence
-                    icao = taf.split()[7]
-                    info = AIRPORT_INFO[AIRPORT_INFO['icao'] == icao]
-                    if info['bench'].values[0] == 'defence':
-                        continue
-
-                    # Add TAF to month collection
-                    taf_type = txt_file[17: -4]
-                    all_tafs[taf_type].append(taf)
-
-            # Need to convert manual TAFs to correct format
-            elif 'issue' in txt_file and 'UK' not in txt_file:
-
-                # Convert to verification format and add to dictionary
-                tafs = convert_manual_tafs(txt_file, taf_dir)
-                all_tafs['manual'].extend(tafs)
-
-        # Add one day to TAF date
-        taf_date += timedelta(days=1)
-
-    return all_tafs
+    with sqlite3.connect(db_file) as connection:
+        for table in ('taf_data', 'taf_decoded_data'):
+            connection.execute(
+                f'DELETE FROM {table} WHERE start_date < ?',
+                (start_dt.strftime('%Y-%m-%d'),))
+        connection.commit()
 
 
 def match_verify(icao, start_str, end_str):
@@ -405,31 +428,29 @@ def match_verify(icao, start_str, end_str):
     return scores_df, cts_vis, cts_clb
 
 
-def update_configs_make_dirs(all_tafs):
+def update_configs_make_dirs():
     """
-    Update config files with new data directory.
-
-    Args:
-        all_tafs (dict): Dictionary containing TAFs for each TAF type
-    Returns:
-        None
+    Update config files and create output directories.
     """
     # Make stats directory if necessary
-    stats_dir = f'{DATA_DIR}/stats'
+    stats_dir = f'{CACHE_DIR}/stats'
     if not os.path.exists(stats_dir):
         os.makedirs(stats_dir)
 
     # Loop through TAF types
-    for t_type in all_tafs:
+    for t_type in TAF_TYPES:
 
         # Make TAF type output directory if necessary
-        t_type_dir = f'{DATA_DIR}/{t_type}'
+        t_type_dir = f'{CACHE_DIR}/{t_type}'
         if not os.path.exists(t_type_dir):
             os.makedirs(t_type_dir)
 
+        if t_type == 'manual':
+            continue
+
         # Define lines to write to config file
         lines = ['[defaults]\n',
-                 (f'taf_connection_string = sqlite:///{DATA_DIR}/decodes/'
+                 (f'taf_connection_string = sqlite:///{CACHE_DIR}/decodes/'
                   f'{t_type}.db\n'),
                  'metar_connection_string = oracle://:@verifyop\n',
                  'table_schema = cfsb\n',
@@ -450,7 +471,7 @@ def update_configs_make_dirs(all_tafs):
                  'metars_per_hour = 2\n']
 
         # Write lines to config file
-        with open(f'{DATA_DIR}/{t_type}.cfg', 'w',
+        with open(f'{CACHE_DIR}/{t_type}.cfg', 'w',
                   encoding='utf-8') as t_file:
             t_file.writelines(lines)
 

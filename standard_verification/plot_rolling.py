@@ -17,7 +17,9 @@ Functions:
 
 Written by Andre Lanyon, 2026.
 """
+import json
 import os
+from datetime import datetime, timezone
 
 import matplotlib
 import matplotlib.dates as mdates
@@ -26,27 +28,31 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import colors
+from matplotlib.lines import Line2D
 
 DATA_DIR = os.environ['DATA_DIR']
+CACHE_DIR = os.path.join(DATA_DIR, 'rolling_36m_autotaf')
 PLOT_DIR = os.environ['PLOT_DIR']
 INFO_FILE = os.environ['INFO_FILE']
-SCORES = {'gerrity': 'Gerrity Skill Scores', 'peirce_0': 'Peirce Skill Scores',
-          'peirce_1': 'Peirce Skill Scores', 'peirce_2': 'Peirce Skill Scores',
-          'peirce_3': 'Peirce Skill Scores', 'peirce_4': 'Peirce Skill Scores',
-          'peirce_5': 'Peirce Skill Scores'}
+SCORES = {'gerrity': 'Gerrity Skill Score',
+          'peirce_0': 'Peirce Skill Score',
+          'peirce_1': 'Peirce Skill Score',
+          'peirce_2': 'Peirce Skill Score',
+          'peirce_3': 'Peirce Skill Score',
+          'peirce_4': 'Peirce Skill Score',
+          'peirce_5': 'Peirce Skill Score'}
 PARAMS = {'vis': 'Visibility', 'clb': 'Cloud Base'}
 TAF_CATS = {'vis': {'0': '<=300m', '1': '300-750m', '2': '800-1400m',
                     '3': '1500-4900m', '4': '5000-9000m', '5': '>=10000m'},
             'clb': {'0': '<=100ft', '1': '200-400ft', '2': '500-900ft',
                     '3': '1000-1400ft', '4': '>=1500ft'}}
-TYPE_ORDER = ['manual', 'pes_obs_update_2_ml', 'pes_obs_update_1_ml', 
-              'pes_no_obs_ml', 'pes_obs_update_2', 'pes_obs_update_1',
-              'pes_no_obs', 'opt_obs_update_2_ml', 'opt_obs_update_1_ml', 
-              'opt_no_obs_ml', 'opt_obs_update_2', 'opt_obs_update_1',
-              'opt_no_obs']
+TYPE_ORDER = ['autotaf', 'manual']
 
-# Load in airport info, mapping icaos to airport names
+# Load verifiable airport info, mapping ICAOs to display names.
 AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
+AIRPORT_INFO = AIRPORT_INFO[
+    (AIRPORT_INFO['bench'] != 'defence')
+    & (AIRPORT_INFO['airport_name'] != 'London City (long)')]
 ICAO_DICT = pd.Series(AIRPORT_INFO.airport_name.values,
                       index=AIRPORT_INFO.icao).to_dict()
 
@@ -63,12 +69,15 @@ def main():
     Returns:
         None
     """
-    # Create line plots and confusion matrices
-    score_line_plots()
+    # Create per-airport and TAF-length group scores, then confusion matrices.
+    histories = load_score_histories()
+    score_line_plots(histories)
+    group_score_plots(histories)
     confusion_plots()
+    write_manifest()
 
 
-def conf_figure(icao, icao_file_list, param):
+def conf_figure(icao, icao_file_list, param, normalize=True):
     """
     Creates a figure of confusion matrices for a given ICAO and
     parameter.
@@ -80,90 +89,80 @@ def conf_figure(icao, icao_file_list, param):
     Returns:
         None
     """
-    # Create figure with subplots stacked vertically
-    num_files = len(icao_file_list)
-    fig, axes = plt.subplots(num_files, 1, figsize=(14, 5 * num_files))
+    if not icao_file_list:
+        return
 
-    # Handle case where there's only one file
-    if num_files == 1:
-        axes = [axes]
+    files_by_type = {
+        file.rsplit('_', 1)[-1][:-4]: file for file in icao_file_list}
+    taf_types = [taf_type for taf_type in TYPE_ORDER
+                 if taf_type in files_by_type]
+    if not taf_types:
+        return
 
-    # Loop through csv files for this ICAO
-    for idx, file in enumerate(icao_file_list):
+    matrices = {}
+    for taf_type in taf_types:
+        matrix = pd.read_csv(
+            os.path.join(CACHE_DIR, 'cts', files_by_type[taf_type]),
+            index_col=0).to_numpy(dtype=float)
+        matrices[taf_type] = np.nan_to_num(matrix)
+    count_max = max(matrix.max(initial=0) for matrix in matrices.values())
 
-        # Load contingency table values into pandas dataframe
-        ct_df = pd.read_csv(os.path.join(f'{DATA_DIR}/cts', file),
-                            index_col=0)
+    fig, axes = plt.subplots(
+        1, len(taf_types), figsize=(7.2 * len(taf_types), 8),
+        squeeze=False)
+    for ax, taf_type in zip(axes[0], taf_types):
+        counts = matrices[taf_type]
+        if normalize:
+            observed_totals = counts.sum(axis=0)
+            values = np.divide(
+                counts * 100, observed_totals,
+                out=np.zeros_like(counts), where=observed_totals != 0)
+            annotations = True
+            vmax = 100
+            colorbar_label = 'Cases within observed category (%)'
+            number_format = '.0f'
+        else:
+            values = counts
+            annotations = np.vectorize(format_count)(values)
+            vmax = max(1, count_max)
+            colorbar_label = 'Cases'
+            number_format = ''
+        category_labels = [TAF_CATS[param][str(i)]
+                           for i in range(counts.shape[0])]
+        sns.heatmap(
+            values, annot=annotations, fmt=number_format,
+            annot_kws={'fontsize': 9}, cmap='YlGnBu', vmin=0,
+            vmax=vmax, linewidths=0.5, linecolor='white', square=True, ax=ax,
+            xticklabels=category_labels, yticklabels=category_labels,
+            cbar_kws={'label': colorbar_label})
+        ax.set_xlabel('Observed category')
+        ax.set_ylabel('Forecast category')
+        ax.set_title(get_taf_type_long(taf_type), weight='bold')
+        ax.tick_params(axis='x', labelrotation=30)
+        ax.tick_params(axis='y', labelrotation=0)
 
-        # Add in totals for rows and columns
-        ct_df.loc['Total Obs'] = ct_df.sum()
-        ct_df['Total Fcsts'] = ct_df.sum(axis=1)
+    fig.suptitle(f'{ICAO_DICT.get(icao, icao)} ({icao}) | {PARAMS[param]}',
+                 x=0.06, ha='left', weight='bold', fontsize=17)
+    caption = ('Each observed-category column is normalized to 100%.'
+               if normalize else
+               'Counts use k=1,000 and M=1,000,000; probability-weighted values may be fractional.')
+    fig.text(0.5, 0.025, caption, ha='center', color='#52616b')
+    fig.tight_layout(rect=(0, 0.13, 1, 0.93))
+    suffix = 'confusion' if normalize else 'confusion_counts'
+    fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_{suffix}.png'),
+                dpi=160)
+    plt.close(fig)
 
-        # Get parameter and TAF type from filename
-        taf_type = file[12: -4]
 
-        # Create labels
-        cats = ct_df.shape[0]
-        fc_labels = [TAF_CATS[param][str(i)]
-                     for i in range(cats - 1)] + ['Total Obs']
-        ob_labels = [TAF_CATS[param][str(i)]
-                     for i in range(cats - 1)] + ['Total Fcsts']
-
-        # Create mask: True = don't colour
-        mask = np.zeros_like(ct_df, dtype=bool)
-        mask[-1, :] = True       # last row (Total Obs)
-        mask[:, -1] = True       # last column (Total Fcsts)
-
-        # Ensure white background for totals
-        axes[idx].set_facecolor('white')
-
-        # Plot heatmap without totals and without numbers
-        sns.heatmap(ct_df, annot=False, fmt='g', cmap='Blues', cbar=False,
-                    mask=mask, ax=axes[idx], xticklabels=ob_labels,
-                    yticklabels=fc_labels)
-
-        # Add numbers to each cell with contrast logic
-        nrows, ncols = ct_df.shape
-        for i in range(nrows):
-            for j in range(ncols):
-                val = ct_df.iloc[i, j]
-
-                # Identify totals row/column
-                is_total = (i == nrows - 1) or (j == ncols - 1)
-
-                # Always black for totals
-                if is_total:
-                    text_color = 'black'
-
-                # Only apply contrast logic to non-total cells
-                else:
-                    max_val = ct_df.iloc[:-1, :-1].values.max()
-                    threshold = max_val * 0.5
-                    text_color = 'white' if val > threshold else 'black'
-
-                # Add text to cell
-                axes[idx].text(j + 0.5, i + 0.5, f"{val:g}", ha='center',
-                               va='center', color=text_color)
-
-        # Labels and title
-        axes[idx].set_xticklabels(axes[idx].get_xticklabels(), rotation=0)
-        axes[idx].set_xlabel('Observed Category', fontsize=25, weight='bold')
-        axes[idx].set_ylabel('Forecast Category', fontsize=25, weight='bold')
-        taf_type_long = get_taf_type_long(taf_type)
-        axes[idx].set_title(taf_type_long, fontsize=30,  weight='bold')
-
-        # Add black border around totals row and column
-        axes[idx].add_patch(plt.Rectangle((ct_df.shape[1]-1, 0), 1,
-                                           ct_df.shape[0], fill=False,
-                                           edgecolor='black', lw=2))
-        axes[idx].add_patch(plt.Rectangle((0, ct_df.shape[0]-1),
-                                          ct_df.shape[1], 1, fill=False,
-                                          edgecolor='black', lw=2))
-
-    # Save figure
-    plt.tight_layout(pad=2.0)
-    fig.savefig(f'{PLOT_DIR}/{icao}_{param}_confusion.png')
-    plt.close()
+def format_count(value):
+    value = float(value)
+    if abs(value) >= 1_000_000:
+        return f'{value / 1_000_000:.1f}M'.replace('.0M', 'M')
+    if abs(value) >= 1_000:
+        return f'{value / 1_000:.1f}k'.replace('.0k', 'k')
+    if value.is_integer():
+        return f'{value:,.0f}'
+    return f'{value:,.1f}'
 
 
 def confusion_plots():
@@ -176,8 +175,9 @@ def confusion_plots():
     Returns:
         None
     """
-    # Get list of csv files in DATA_DIR/cts
-    files = sorted(os.listdir(f'{DATA_DIR}/cts'))
+    # Plot only the current comparison, not legacy TAF type outputs.
+    files = sorted(file for file in os.listdir(f'{CACHE_DIR}/cts')
+                   if file.endswith(('_autotaf.csv', '_manual.csv')))
 
     # Group files by ICAO
     icao_files = {}
@@ -188,16 +188,12 @@ def confusion_plots():
             icao_files[icao] = {'vis': [], 'clb': []}
         icao_files[icao][param].append(file)
 
-    # Order file lists for each ICAO by TAF type
-    for icao, param_dict in icao_files.items():
-        for param in param_dict:
-            param_dict[param].sort(key=lambda x: TYPE_ORDER.index(x[12: -4]))
-
     # Loop through each ICAO and create separate figure for each
     # parameter
     for icao, icao_file_dict in icao_files.items():
         for param, icao_file_list in icao_file_dict.items():
-            conf_figure(icao, icao_file_list, param)
+            conf_figure(icao, icao_file_list, param, normalize=True)
+            conf_figure(icao, icao_file_list, param, normalize=False)
 
 
 def get_taf_type_long(short_name):
@@ -210,6 +206,7 @@ def get_taf_type_long(short_name):
         long_name (str): Long TAF type name
     """
     type_map = {
+        'autotaf': 'AUTOTAF',
         'opt_no_obs': 'Optimistic Auto TAFs\n(no obs, {})',
         'opt_obs_update_1': 'Optimistic Auto TAFs\n(obs update 1, {})',
         'opt_obs_update_2': 'Optimistic Auto TAFs\n(obs update 2, {})',
@@ -218,6 +215,9 @@ def get_taf_type_long(short_name):
         'pes_obs_update_2': 'Pessimistic Auto TAFs\n(obs update 2, {})',
         'manual': 'Manual TAFs'
     }
+    if 'autotaf' in short_name:
+        return type_map['autotaf']
+
     # Manual TAF name straightforward
     if 'manual' in short_name:
         return type_map['manual']
@@ -365,41 +365,290 @@ def sample_shades(cmap_name, n, low=0.30, high=0.95):
     return [colors.to_hex(cmap(v)) for v in vals]
 
 
-def score_line_plots():
-    """
-    Creates line plots of rolling scores for each ICAO, parameter, and
-    score type.
+SOURCE_STYLES = {
+    'autotaf': {'color': '#007F86', 'linestyle': '-',
+                'marker': 'o', 'markersize': 3},
+    'manual': {'color': '#D55E00', 'linestyle': '--',
+               'marker': 'D', 'markersize': 4}
+}
+GROUPS = {9: '9h', 24: '24h', 30: '30h'}
 
-    Args:
-        None
-    Returns:
-        None
-    """
-    # Build colour palette
-    blues6 = sample_shades('Blues', 6, low=0.30, high=0.95)
-    reds6  = sample_shades('Reds',  6, low=0.30, high=0.95)
-    green1 = ['#2ca02c']
-    palette_13 = blues6 + reds6 + green1
 
-    # Loop through csv files in DATA_DIR/stats
-    for file in os.listdir(f'{DATA_DIR}/stats'):
+def last_non_null(values):
+    valid = values.dropna()
+    return valid.iloc[-1] if not valid.empty else np.nan
 
-        # Get ICAO from filename
-        icao = file.split('_')[0]
 
-        # Load file into pandas dataframe
-        vdf = pd.read_csv(os.path.join(f'{DATA_DIR}/stats', file))
+def read_score_history(path):
+    scores = pd.read_csv(path)
+    if scores['Date'].duplicated().any():
+        value_columns = [column for column in scores.columns if column != 'Date']
+        scores = scores.groupby('Date', sort=True, as_index=False).agg(
+            {column: last_non_null for column in value_columns})
+    scores['Date'] = pd.to_datetime(scores['Date'], format='%Y%m%d')
+    return scores.sort_values('Date')
 
-        # Loop through parameters
+
+def load_score_histories():
+    histories = {}
+    stats_dir = os.path.join(CACHE_DIR, 'stats')
+    for file in sorted(os.listdir(stats_dir)):
+        if not file.endswith('_scores.csv'):
+            continue
+        icao = file[:-len('_scores.csv')]
+        if icao in ICAO_DICT:
+            histories[icao] = read_score_history(os.path.join(stats_dir, file))
+    return histories
+
+
+def score_line_plots(histories):
+    os.makedirs(PLOT_DIR, exist_ok=True)
+    for icao, scores in histories.items():
         for param in PARAMS:
+            skill_figures(icao, param, scores)
 
-            # Filter dataframe for parameter
-            param_df = vdf[['Date'] + [col for col in vdf.columns
-                                       if param in col]]
 
-            # Loop through scores and plot each one
-            for score_name in SCORES:
-                line_figure(icao, param, score_name, param_df, palette_13)
+def skill_figures(icao, param, scores):
+    """Create Gerrity and all-category Peirce figures for one station."""
+    gerrity_columns = [f'gerrity_{param}_{taf_type}'
+                       for taf_type in TYPE_ORDER
+                       if f'gerrity_{param}_{taf_type}' in scores]
+    if gerrity_columns:
+        fig, ax = plt.subplots(figsize=(12, 6.5))
+        for taf_type in TYPE_ORDER:
+            column = f'gerrity_{param}_{taf_type}'
+            if column in scores:
+                ax.plot(scores['Date'], scores[column], linewidth=2,
+                        label=get_taf_type_long(taf_type),
+                        **SOURCE_STYLES[taf_type])
+        ax.set_title('Gerrity Skill Score', loc='left', weight='bold')
+        format_skill_axis(ax, [scores[column] for column in gerrity_columns])
+        ax.legend(title='Forecast source', frameon=False,
+                  loc='upper left', bbox_to_anchor=(1.02, 1))
+        fig.suptitle(f'{ICAO_DICT[icao]} ({icao}) | {PARAMS[param]}',
+                     x=0.08, ha='left', weight='bold', fontsize=17)
+        fig.tight_layout(rect=(0, 0, 0.78, 0.92))
+        fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_gerrity.png'),
+                    dpi=160)
+        plt.close(fig)
+
+    categories = list(TAF_CATS[param].items())
+    columns = 2
+    rows = (len(categories) + columns - 1) // columns
+    fig, axes = plt.subplots(rows, columns, figsize=(14, 4 * rows),
+                             sharex=True, sharey=False, squeeze=False)
+    for ax, (category, label) in zip(axes.flat, categories):
+        category_index = int(category)
+        score_columns = [f'peirce_{param}_{taf_type}_{category_index}'
+                         for taf_type in TYPE_ORDER
+                         if f'peirce_{param}_{taf_type}_{category_index}'
+                         in scores]
+        has_values = any(scores[column].notna().any()
+                 for column in score_columns)
+        if not has_values:
+            ax.text(0.5, 0.5, 'No valid scores in this window',
+                transform=ax.transAxes, ha='center', va='center',
+                color='#687780')
+        for taf_type in TYPE_ORDER:
+            score_column = f'peirce_{param}_{taf_type}_{category_index}'
+            if score_column in scores:
+                ax.plot(scores['Date'], scores[score_column], linewidth=1.8,
+                        label=get_taf_type_long(taf_type),
+                        **SOURCE_STYLES[taf_type])
+                valid_scores = scores[['Date', score_column]].dropna()
+                if not valid_scores.empty:
+                    latest = valid_scores.iloc[-1]
+                    ax.annotate(
+                        f'{latest[score_column]:+.3f}',
+                        xy=(latest['Date'], latest[score_column]),
+                        xytext=(6, 0), textcoords='offset points',
+                        color=SOURCE_STYLES[taf_type]['color'],
+                        fontsize=8, va='center', clip_on=False)
+        ax.margins(x=0.18)
+        ax.set_title(f'Category {category_index + 1}: {label}',
+                     loc='left', weight='bold')
+        format_skill_axis(ax, [scores[column] for column in score_columns])
+    for ax in list(axes.flat)[len(categories):]:
+        ax.set_visible(False)
+    legend_handles = [
+        Line2D([0], [0], label=get_taf_type_long(taf_type),
+               **SOURCE_STYLES[taf_type], linewidth=2)
+        for taf_type in TYPE_ORDER]
+    fig.legend(handles=legend_handles, title='Forecast source', frameon=False,
+               loc='center left', bbox_to_anchor=(0.81, 0.5))
+    fig.suptitle(f'{ICAO_DICT[icao]} ({icao}) | {PARAMS[param]} Peirce Skill',
+                 x=0.08, ha='left', weight='bold', fontsize=17)
+    fig.tight_layout(rect=(0, 0, 0.8, 0.93))
+    fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_peirce.png'), dpi=160)
+    plt.close(fig)
+
+
+def format_skill_axis(ax, score_columns):
+    values = pd.concat(score_columns, ignore_index=True).dropna()
+    if values.empty:
+        lower, upper = -1.05, 1.05
+    else:
+        minimum, maximum = values.min(), values.max()
+        padding = max((maximum - minimum) * 0.2, 0.015)
+        lower = max(-1, minimum - padding)
+        upper = min(1, maximum + padding)
+        if upper - lower < 0.04:
+            midpoint = (upper + lower) / 2
+            lower, upper = max(-1, midpoint - 0.02), min(1, midpoint + 0.02)
+    ax.set_ylim(lower, upper)
+    if lower <= 0 <= upper:
+        ax.axhline(0, color='#687780', linewidth=1, linestyle='--')
+    ax.set_ylabel('Skill score')
+    ax.set_xlabel('Verification window end date')
+    ax.grid(axis='y', color='#d7e0e2', linewidth=0.8)
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+
+def plot_group_series(ax, histories, station_codes, param, metric,
+                      station_colors, category=None):
+    score_columns = []
+    for icao in station_codes:
+        scores = histories[icao]
+        for taf_type in TYPE_ORDER:
+            suffix = '' if category is None else f'_{category}'
+            column = f'{metric}_{param}_{taf_type}{suffix}'
+            if column not in scores or not scores[column].notna().any():
+                continue
+            ax.plot(
+                scores['Date'], scores[column],
+                color=station_colors[icao][taf_type],
+                linestyle=SOURCE_STYLES[taf_type]['linestyle'],
+                linewidth=0.9 if taf_type == 'autotaf' else 1.1,
+                marker='.' if taf_type == 'autotaf' else 'D',
+                markersize=2.5 if taf_type == 'autotaf' else 3.5,
+                alpha=0.78)
+            score_columns.append(scores[column])
+    return score_columns
+
+
+def add_group_legends(fig, station_codes, station_colors):
+    source_handles = [
+        Line2D([0], [0], color='#3f4d53',
+               linestyle=SOURCE_STYLES[taf_type]['linestyle'], linewidth=2,
+               label=get_taf_type_long(taf_type))
+        for taf_type in TYPE_ORDER]
+    source_legend = fig.legend(
+        handles=source_handles, title='Source style', frameon=False,
+        loc='upper left', bbox_to_anchor=(0.81, 0.9))
+    fig.add_artist(source_legend)
+    for taf_type, x_anchor in (('autotaf', 0.02), ('manual', 0.40)):
+        style = SOURCE_STYLES[taf_type]
+        handles = [
+            Line2D([0], [0], color=station_colors[icao][taf_type],
+                   linestyle=style['linestyle'], marker=style['marker'],
+                   markersize=4, linewidth=2, label=icao)
+            for icao in station_codes]
+        legend = fig.legend(
+            handles=handles, title=get_taf_type_long(taf_type),
+            frameon=False, loc='lower left',
+            bbox_to_anchor=(x_anchor, 0.005), ncol=3, fontsize=8)
+        fig.add_artist(legend)
+
+
+def group_score_plots(histories):
+    station_groups = {
+        hours: [icao for icao in histories
+                if int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
+                                       'taf_len'].iloc[0]) == hours]
+        for hours in GROUPS}
+    for hours, group_code in GROUPS.items():
+        stations = station_groups[hours]
+        if not stations:
+            continue
+        group_title = f'{hours}-hour TAF airports (n={len(stations)})'
+        blues = sample_shades('Blues', len(stations), low=0.35)
+        reds = sample_shades('Reds', len(stations), low=0.35)
+        station_colors = {icao: {'autotaf': blue, 'manual': red}
+                          for icao, blue, red in zip(stations, blues, reds)}
+        legend_rows = (len(stations) + 2) // 3
+        legend_bottom = min(0.38, max(0.16, 0.04 * legend_rows + 0.04))
+        for param in PARAMS:
+            fig, ax = plt.subplots(figsize=(14, 8 + 0.24 * legend_rows))
+            score_columns = plot_group_series(
+                ax, histories, stations, param, 'gerrity', station_colors)
+            if score_columns:
+                ax.set_title('Gerrity Skill Score by airport', loc='left',
+                             weight='bold')
+                format_skill_axis(ax, score_columns)
+                add_group_legends(fig, stations, station_colors)
+                fig.suptitle(f'{group_title} | {PARAMS[param]}', x=0.08,
+                             ha='left', weight='bold', fontsize=17)
+                fig.tight_layout(rect=(0, legend_bottom, 0.78, 0.92))
+                fig.savefig(os.path.join(
+                    PLOT_DIR, f'group_{group_code}_{param}_gerrity.png'),
+                    dpi=160)
+            plt.close(fig)
+
+            categories = list(TAF_CATS[param].items())
+            ncols = 2
+            nrows = (len(categories) + ncols - 1) // ncols
+            fig, axes = plt.subplots(nrows, ncols,
+                                     figsize=(15, 3.8 * nrows +
+                                              0.24 * legend_rows),
+                                     sharex=True, sharey=False, squeeze=False)
+            has_data = False
+            for ax, (category, label) in zip(axes.flat, categories):
+                score_columns = plot_group_series(
+                    ax, histories, stations, param, 'peirce', station_colors,
+                    category=int(category))
+                ax.set_title(f'Category {int(category) + 1}: {label}',
+                             loc='left', weight='bold')
+                if not score_columns:
+                    ax.text(0.5, 0.5, 'No valid scores in this group',
+                            transform=ax.transAxes, ha='center', va='center',
+                            color='#687780')
+                    continue
+                has_data = True
+                format_skill_axis(ax, score_columns)
+            for ax in list(axes.flat)[len(categories):]:
+                ax.set_visible(False)
+            if has_data:
+                add_group_legends(fig, stations, station_colors)
+                fig.suptitle(f'{group_title} | {PARAMS[param]} Peirce Skill',
+                             x=0.08, ha='left', weight='bold', fontsize=17)
+                fig.tight_layout(rect=(0, legend_bottom, 0.78, 0.93))
+                fig.savefig(os.path.join(
+                    PLOT_DIR, f'group_{group_code}_{param}_peirce.png'),
+                    dpi=160)
+            plt.close(fig)
+
+
+def write_manifest():
+    """Publish the station list and rolling window used by the plots."""
+    cycle_date = os.environ.get('CYCLE_DATE')
+    window = {}
+    if cycle_date:
+        window_end = pd.Timestamp(cycle_date) - pd.Timedelta(days=1)
+        window_start = window_end - pd.DateOffset(years=3)
+        window = {
+            'window_start': window_start.strftime('%Y-%m-%d'),
+            'window_end': window_end.strftime('%Y-%m-%d')}
+
+    station_codes = sorted(
+        file[:-len('_scores.csv')]
+        for file in os.listdir(os.path.join(CACHE_DIR, 'stats'))
+        if file.endswith('_scores.csv')
+        and file[:-len('_scores.csv')] in ICAO_DICT)
+    manifest = {
+        'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        **window,
+        'stations': [
+            {'icao': icao, 'name': ICAO_DICT[icao]}
+            for icao in station_codes]}
+
+    os.makedirs(PLOT_DIR, exist_ok=True)
+    path = os.path.join(PLOT_DIR, 'rolling_ver_plots.json')
+    temporary_path = f'{path}.tmp'
+    with open(temporary_path, 'w', encoding='utf-8') as manifest_file:
+        json.dump(manifest, manifest_file)
+    os.replace(temporary_path, path)
 
 
 if __name__ == "__main__":

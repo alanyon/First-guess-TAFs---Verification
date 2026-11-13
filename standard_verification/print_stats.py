@@ -287,13 +287,14 @@ def calc_scores(param, station, start, end):
 
     for case, taf_type in zip(cases, TAF_TYPES):
 
+        date_axis = case.data.get_val_axis('dates')
+        ct_vals = np.squeeze(np.nansum(case.data.vals, axis=date_axis))
+
         # Mean over all dates
         case.data.mean_all_dates()
 
-        # Save contingency table values for plotting
-        ct_vals = np.squeeze(case.data.vals)
-
-        # Convert to DataFrame
+        # Save summed contingency counts for plotting; skill scores below
+        # continue to use VerPy's mean over dates.
         cats = ct_vals.shape[0]
         df_ct = pd.DataFrame(ct_vals,
                              index=[f'FC_cat_{i+1}' for i in range(cats)],
