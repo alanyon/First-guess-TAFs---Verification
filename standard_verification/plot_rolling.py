@@ -47,6 +47,31 @@ TAF_CATS = {'vis': {'0': '<=300m', '1': '300-750m', '2': '800-1400m',
             'clb': {'0': '<=100ft', '1': '200-400ft', '2': '500-900ft',
                     '3': '1000-1400ft', '4': '>=1500ft'}}
 TYPE_ORDER = ['autotaf', 'manual']
+CAA_TARGETS = {
+    9: {'vis': 0.408, 'clb': 0.521},
+    24: {'vis': 0.357, 'clb': 0.467},
+    30: {'vis': 0.366, 'clb': 0.458}}
+CAA_AIRPORT_GROUPS = {
+    '9h_north': {
+        'hours': 9, 'label': '9-hour North',
+        'airports': ('EGAC', 'EGAE', 'EGNS', 'EGNV', 'EGPA', 'EGPB',
+                     'EGPE', 'EGPO')},
+    '24h_north': {
+        'hours': 24, 'label': '24-hour North',
+        'airports': ('EGAA', 'EGNM', 'EGNT', 'EGPD', 'EGPF', 'EGPH',
+                     'EGPK')},
+    '9h_south': {
+        'hours': 9, 'label': '9-hour South',
+        'airports': ('EGHH', 'EGHI', 'EGHQ', 'EGMC', 'EGNJ', 'EGSH',
+                     'EGTE', 'EGLC')},
+    '24h_south': {
+        'hours': 24, 'label': '24-hour South',
+        'airports': ('EGBB', 'EGGD', 'EGFF', 'EGGP', 'EGGW', 'EGNX')},
+    '30h_south': {
+        'hours': 30, 'label': '30-hour South',
+        'airports': ('EGCC', 'EGKK', 'EGLL', 'EGSS')}}
+CAA_MEDIAN_EXCLUSIONS = {9: {'EGNS'}}
+HOUR_COLORS = {9: '#7b7f00', 24: '#263b83', 30: '#e87800'}
 
 # Load verifiable airport info, mapping ICAOs to display names.
 AIRPORT_INFO = pd.read_csv(INFO_FILE, header=0)
@@ -73,6 +98,7 @@ def main():
     histories = load_score_histories()
     score_line_plots(histories)
     group_score_plots(histories)
+    median_score_plots(histories)
     confusion_plots()
     write_manifest()
 
@@ -413,6 +439,9 @@ def skill_figures(icao, param, scores):
     gerrity_columns = [f'gerrity_{param}_{taf_type}'
                        for taf_type in TYPE_ORDER
                        if f'gerrity_{param}_{taf_type}' in scores]
+    hours = int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
+                                 'taf_len'].iloc[0])
+    target = CAA_TARGETS.get(hours, {}).get(param)
     if gerrity_columns:
         fig, ax = plt.subplots(figsize=(12, 6.5))
         for taf_type in TYPE_ORDER:
@@ -422,8 +451,13 @@ def skill_figures(icao, param, scores):
                         label=get_taf_type_long(taf_type),
                         **SOURCE_STYLES[taf_type])
         ax.set_title('Gerrity Skill Score', loc='left', weight='bold')
-        format_skill_axis(ax, [scores[column] for column in gerrity_columns])
-        ax.legend(title='Forecast source', frameon=False,
+        targets = [] if target is None else [target]
+        format_skill_axis(ax, [scores[column] for column in gerrity_columns],
+                          targets)
+        if target is not None:
+            ax.axhline(target, color='#687780', linestyle=':', linewidth=1.5,
+                       label=f'CAA target ({target:.3f})')
+        ax.legend(title='Forecast source / target', frameon=False,
                   loc='upper left', bbox_to_anchor=(1.02, 1))
         fig.suptitle(f'{ICAO_DICT[icao]} ({icao}) | {PARAMS[param]}',
                      x=0.08, ha='left', weight='bold', fontsize=17)
@@ -483,8 +517,10 @@ def skill_figures(icao, param, scores):
     plt.close(fig)
 
 
-def format_skill_axis(ax, score_columns):
-    values = pd.concat(score_columns, ignore_index=True).dropna()
+def format_skill_axis(ax, score_columns, reference_values=()):
+    values = pd.concat(
+        [*score_columns, pd.Series(reference_values, dtype=float)],
+        ignore_index=True).dropna()
     if values.empty:
         lower, upper = -1.05, 1.05
     else:
@@ -528,14 +564,20 @@ def plot_group_series(ax, histories, station_codes, param, metric,
     return score_columns
 
 
-def add_group_legends(fig, station_codes, station_colors):
+def add_group_legends(fig, station_codes, station_colors, target=None):
     source_handles = [
         Line2D([0], [0], color='#3f4d53',
                linestyle=SOURCE_STYLES[taf_type]['linestyle'], linewidth=2,
                label=get_taf_type_long(taf_type))
         for taf_type in TYPE_ORDER]
+    if target is not None:
+        source_handles.append(Line2D(
+            [0], [0], color='#687780', linestyle=':', linewidth=2,
+            label=f'CAA target ({target:.3f})'))
     source_legend = fig.legend(
-        handles=source_handles, title='Source style', frameon=False,
+        handles=source_handles,
+        title='Source style / target' if target is not None else 'Source style',
+        frameon=False,
         loc='upper left', bbox_to_anchor=(0.81, 0.9))
     fig.add_artist(source_legend)
     for taf_type, x_anchor in (('autotaf', 0.02), ('manual', 0.40)):
@@ -553,16 +595,26 @@ def add_group_legends(fig, station_codes, station_colors):
 
 
 def group_score_plots(histories):
-    station_groups = {
-        hours: [icao for icao in histories
-                if int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
-                                       'taf_len'].iloc[0]) == hours]
-        for hours in GROUPS}
-    for hours, group_code in GROUPS.items():
-        stations = station_groups[hours]
+    station_groups = [
+        (hours, group_code, f'{hours}-hour TAF',
+         [icao for icao in histories
+          if int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
+                                  'taf_len'].iloc[0]) == hours])
+        for hours, group_code in GROUPS.items()]
+    for group_code, group in CAA_AIRPORT_GROUPS.items():
+        hours = group['hours']
+        stations = [
+            icao for icao in group['airports']
+            if icao in histories and icao in ICAO_DICT
+            and int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
+                                     'taf_len'].iloc[0]) == hours]
+        station_groups.append((hours, f'caa_{group_code}', group['label'],
+                               stations))
+
+    for hours, group_code, group_label, stations in station_groups:
         if not stations:
             continue
-        group_title = f'{hours}-hour TAF airports (n={len(stations)})'
+        group_title = f'{group_label} airports (n={len(stations)})'
         blues = sample_shades('Blues', len(stations), low=0.35)
         reds = sample_shades('Reds', len(stations), low=0.35)
         station_colors = {icao: {'autotaf': blue, 'manual': red}
@@ -574,10 +626,13 @@ def group_score_plots(histories):
             score_columns = plot_group_series(
                 ax, histories, stations, param, 'gerrity', station_colors)
             if score_columns:
+                target = CAA_TARGETS[hours][param]
                 ax.set_title('Gerrity Skill Score by airport', loc='left',
                              weight='bold')
-                format_skill_axis(ax, score_columns)
-                add_group_legends(fig, stations, station_colors)
+                format_skill_axis(ax, score_columns, [target])
+                ax.axhline(target, color='#687780', linestyle=':',
+                           linewidth=1.5)
+                add_group_legends(fig, stations, station_colors, target)
                 fig.suptitle(f'{group_title} | {PARAMS[param]}', x=0.08,
                              ha='left', weight='bold', fontsize=17)
                 fig.tight_layout(rect=(0, legend_bottom, 0.78, 0.92))
@@ -618,6 +673,69 @@ def group_score_plots(histories):
                     PLOT_DIR, f'group_{group_code}_{param}_peirce.png'),
                     dpi=160)
             plt.close(fig)
+
+
+def median_score_plots(histories):
+    """Plot rolling medians for the CAA airport groups and their targets."""
+    os.makedirs(PLOT_DIR, exist_ok=True)
+    for param in PARAMS:
+        fig, ax = plt.subplots(figsize=(14, 7))
+        median_columns = []
+        target_values = []
+
+        for hours in GROUPS:
+            station_codes = sorted({
+                icao for group in CAA_AIRPORT_GROUPS.values()
+                if group['hours'] == hours
+                for icao in group['airports']
+                if icao not in CAA_MEDIAN_EXCLUSIONS.get(hours, set())
+                and icao in histories and icao in ICAO_DICT
+                and int(AIRPORT_INFO.loc[AIRPORT_INFO.icao == icao,
+                                         'taf_len'].iloc[0]) == hours})
+            length_columns = []
+            for taf_type in TYPE_ORDER:
+                column = f'gerrity_{param}_{taf_type}'
+                station_scores = [
+                    histories[icao].set_index('Date')[column].rename(icao)
+                    for icao in station_codes
+                    if column in histories[icao]
+                    and histories[icao][column].notna().any()]
+                if not station_scores:
+                    continue
+                median = pd.concat(station_scores, axis=1).median(axis=1)
+                median = median.dropna().sort_index()
+                if median.empty:
+                    continue
+                label = f'Median {hours}-hour {get_taf_type_long(taf_type)}'
+                ax.plot(
+                    median.index, median.values, color=HOUR_COLORS[hours],
+                    linestyle=SOURCE_STYLES[taf_type]['linestyle'],
+                    marker=SOURCE_STYLES[taf_type]['marker'], markersize=3,
+                    linewidth=2, label=label)
+                median_columns.append(median)
+                length_columns.append(median)
+
+            if length_columns:
+                target = CAA_TARGETS[hours][param]
+                ax.axhline(
+                    target, color=HOUR_COLORS[hours], linestyle=':',
+                    linewidth=1.5,
+                    label=f'{hours}-hour CAA target ({target:.3f})')
+                target_values.append(target)
+
+        if not median_columns:
+            plt.close(fig)
+            continue
+        format_skill_axis(ax, median_columns, target_values)
+        ax.legend(title='Median scores / CAA targets', frameon=False,
+                  loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
+        fig.suptitle(f'CAA Airport Median Gerrity Skill Score | '
+                     f'{PARAMS[param]}', x=0.08, ha='left', weight='bold',
+                     fontsize=17)
+        fig.tight_layout(rect=(0, 0, 0.76, 0.92))
+        fig.savefig(os.path.join(
+            PLOT_DIR, f'median_{param}_gerrity.png'), dpi=160)
+        plt.close(fig)
 
 
 def write_manifest():
