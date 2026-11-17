@@ -288,7 +288,7 @@ def get_taf_sources(start_dt, end_dt):
             source_files.extend(
                 os.path.join(taf_dir, name)
                 for name in names
-                if name.endswith('_verification_mix_no_obs.txt'))
+                    if name.endswith('_verification_mix_no_obs_ml.txt'))
         taf_date += timedelta(days=1)
 
     if not source_files:
