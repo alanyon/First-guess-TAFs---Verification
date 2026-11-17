@@ -21,13 +21,11 @@ import json
 import os
 from datetime import datetime, timezone
 
-import matplotlib
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib import colors
 from matplotlib.lines import Line2D
 
 DATA_DIR = os.environ['DATA_DIR']
@@ -164,7 +162,9 @@ def conf_figure(icao, icao_file_list, param, normalize=True):
         ax.set_xlabel('Observed category')
         ax.set_ylabel('Forecast category')
         ax.set_title(get_taf_type_long(taf_type), weight='bold')
-        ax.tick_params(axis='x', labelrotation=30)
+        ax.set_xticks(np.arange(len(category_labels)) + 0.5)
+        ax.set_xticklabels(category_labels, rotation=45, ha='center',
+                    rotation_mode='anchor')
         ax.tick_params(axis='y', labelrotation=0)
 
     fig.suptitle(f'{ICAO_DICT.get(icao, icao)} ({icao}) | {PARAMS[param]}',
@@ -373,36 +373,21 @@ def name_cols(columns):
     return new_cols
 
 
-def sample_shades(cmap_name, n, low=0.30, high=0.95):
-    """
-    Sample 'n' visually distinct hex colors from a sequential colormap,
-    avoiding extremes that are too dark/light.
-
-    Args:
-        cmap_name (str): Name of the colormap to sample from
-        n (int): Number of colors to sample
-        low (float): Lower bound for sampling (0 to 1)
-        high (float): Upper bound for sampling (0 to 1)
-    Returns:
-        colors (list): List of hex color strings
-    """
-    cmap = matplotlib.colormaps[cmap_name]
-    vals = np.linspace(low, high, n)
-    return [colors.to_hex(cmap(v)) for v in vals]
-
-
 SOURCE_STYLES = {
     'autotaf': {'color': '#2166ac', 'linestyle': '-',
                 'marker': 'o', 'markersize': 3},
     'manual': {'color': '#b2182b', 'linestyle': '-',
                'marker': 'D', 'markersize': 4}
 }
+SOURCE_PERCENTILE_COLORS = {
+    'autotaf': {'q25': '#9ecae1', 'median': '#2166ac', 'q75': '#084594'},
+    'manual': {'q25': '#fcae91', 'median': '#b2182b', 'q75': '#7f0000'}}
 GROUPS = {9: '9h', 24: '24h', 30: '30h'}
 HOUR_SOURCE_COLORS = {
     9: {'autotaf': '#9ecae1', 'manual': '#fcae91'},
     24: {'autotaf': '#4292c6', 'manual': '#fb6a4a'},
     30: {'autotaf': '#084594', 'manual': '#a50f15'}}
-TARGET_COLORS = {9: '#777777', 24: '#4d4d4d', 30: '#222222'}
+TARGET_COLORS = {9: '#00866A', 24: '#7A5195', 30: '#C77700'}
 
 
 def last_non_null(values):
@@ -458,7 +443,7 @@ def skill_figures(icao, param, scores):
         ax.set_title('Gerrity Skill Score', loc='left', weight='bold')
         targets = [] if target is None else [target]
         format_skill_axis(ax, [scores[column] for column in gerrity_columns],
-                          targets)
+                          targets, adaptive_month_ticks=True)
         if target is not None:
             ax.axhline(target, color='#687780', linestyle=':', linewidth=1.5,
                        label=f'CAA target ({target:.3f})')
@@ -508,7 +493,8 @@ def skill_figures(icao, param, scores):
         ax.margins(x=0.18)
         ax.set_title(f'Category {category_index + 1}: {label}',
                      loc='left', weight='bold')
-        format_skill_axis(ax, [scores[column] for column in score_columns])
+        format_skill_axis(ax, [scores[column] for column in score_columns],
+                  adaptive_month_ticks=True)
     for ax in list(axes.flat)[len(categories):]:
         ax.set_visible(False)
     legend_handles = [
@@ -524,7 +510,8 @@ def skill_figures(icao, param, scores):
     plt.close(fig)
 
 
-def format_skill_axis(ax, score_columns, reference_values=()):
+def format_skill_axis(ax, score_columns, reference_values=(),
+                      adaptive_month_ticks=False):
     values = pd.concat(
         [*score_columns, pd.Series(reference_values, dtype=float)],
         ignore_index=True).dropna()
@@ -545,60 +532,94 @@ def format_skill_axis(ax, score_columns, reference_values=()):
     ax.set_xlabel('Verification window end date')
     ax.grid(axis='y', color='#d7e0e2', linewidth=0.8)
     ax.spines[['top', 'right']].set_visible(False)
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
+    interval = 6
+    if adaptive_month_ticks:
+        span_months = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 12 / 365.2425
+        axis_width = ax.get_position().width * ax.figure.get_figwidth() * 0.8
+        max_labels = max(3, min(6, int(axis_width / 0.8)))
+        desired_interval = max(1, int(np.ceil(span_months / max_labels)))
+        intervals = (1, 2, 3, 4, 6, 8, 9, 12, 18, 24, 36, 48)
+        interval = next(
+            (value for value in intervals if value >= desired_interval),
+            desired_interval)
+    date_locator = mdates.MonthLocator(interval=interval)
+    ax.xaxis.set_major_locator(date_locator)
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    ax.tick_params(axis='x', labelrotation=30)
+    for label in ax.get_xticklabels():
+        label.set_horizontalalignment('right')
 
 
-def plot_group_series(ax, histories, station_codes, param, metric,
-                      station_colors, category=None):
+def group_score_summaries(histories, station_codes, param, metric,
+                          category=None):
+    """Summarize airport scores by source and rolling-window date."""
+    suffix = '' if category is None else f'_{category}'
+    summaries = {}
+    for taf_type in TYPE_ORDER:
+        column = f'{metric}_{param}_{taf_type}{suffix}'
+        station_scores = [
+            histories[icao].set_index('Date')[column]
+            .replace([np.inf, -np.inf], np.nan).rename(icao)
+            for icao in station_codes
+            if column in histories[icao]
+            and histories[icao][column].notna().any()]
+        if not station_scores:
+            continue
+        scores_by_date = pd.concat(station_scores, axis=1).sort_index()
+        summaries[taf_type] = pd.DataFrame({
+            'q25': scores_by_date.quantile(0.25, axis=1),
+            'median': scores_by_date.median(axis=1),
+            'q75': scores_by_date.quantile(0.75, axis=1),
+            'count': scores_by_date.count(axis=1)})
+    return summaries
+
+
+def plot_group_summaries(ax, summaries):
+    """Plot source medians and dashed 25th/75th percentile lines."""
     score_columns = []
-    for icao in station_codes:
-        scores = histories[icao]
-        for taf_type in TYPE_ORDER:
-            suffix = '' if category is None else f'_{category}'
-            column = f'{metric}_{param}_{taf_type}{suffix}'
-            if column not in scores or not scores[column].notna().any():
-                continue
-            ax.plot(
-                scores['Date'], scores[column],
-                color=station_colors[icao][taf_type],
-                linestyle=SOURCE_STYLES[taf_type]['linestyle'],
-                linewidth=0.9 if taf_type == 'autotaf' else 1.1,
-                marker='.' if taf_type == 'autotaf' else 'D',
-                markersize=2.5 if taf_type == 'autotaf' else 3.5,
-                alpha=0.78)
-            score_columns.append(scores[column])
+    for taf_type in TYPE_ORDER:
+        if taf_type not in summaries:
+            continue
+        summary = summaries[taf_type].dropna(subset=['median'])
+        if summary.empty:
+            continue
+        colors = SOURCE_PERCENTILE_COLORS[taf_type]
+        dates = summary.index
+        ax.plot(dates, summary['q25'].to_numpy(dtype=float),
+            color=colors['q25'],
+            linewidth=1.2, linestyle='--')
+        ax.plot(dates, summary['median'].to_numpy(dtype=float),
+            color=colors['median'], linewidth=2.2,
+                label=f'{get_taf_type_long(taf_type)} median')
+        ax.plot(dates, summary['q75'].to_numpy(dtype=float),
+            color=colors['q75'],
+            linewidth=1.2, linestyle='--')
+        score_columns.extend(
+            [summary['q25'], summary['median'], summary['q75']])
     return score_columns
 
 
-def add_group_legends(fig, station_codes, station_colors, target=None):
-    source_handles = [
-        Line2D([0], [0], color=SOURCE_STYLES[taf_type]['color'],
-               linestyle='-', linewidth=2,
-               label=get_taf_type_long(taf_type))
-        for taf_type in TYPE_ORDER]
+def add_group_legend(fig, target=None):
+    """Place source median/percentile lines and optional target outside."""
+    handles = []
+    for taf_type in TYPE_ORDER:
+        colors = SOURCE_PERCENTILE_COLORS[taf_type]
+        handles.extend([
+            Line2D([0], [0], color=colors['median'], linewidth=2.2,
+                   label=f'{get_taf_type_long(taf_type)} median'),
+            Line2D([0], [0], color=colors['q25'], linewidth=1.2,
+                   linestyle='--',
+                   label=f'{get_taf_type_long(taf_type)} 25th percentile'),
+            Line2D([0], [0], color=colors['q75'], linewidth=1.2,
+                   linestyle='--',
+                   label=f'{get_taf_type_long(taf_type)} 75th percentile')])
     if target is not None:
-        source_handles.append(Line2D(
-            [0], [0], color='#687780', linestyle=':', linewidth=2,
+        handles.append(Line2D(
+            [0], [0], color='#687780', linestyle=':', linewidth=1.5,
             label=f'CAA target ({target:.3f})'))
-    source_legend = fig.legend(
-        handles=source_handles,
-        title='Forecast source / target' if target is not None
-        else 'Forecast source',
-        frameon=False, loc='upper right', bbox_to_anchor=(0.98, 0.98))
-    fig.add_artist(source_legend)
-    for taf_type, x_anchor in (('autotaf', 0.02), ('manual', 0.40)):
-        style = SOURCE_STYLES[taf_type]
-        handles = [
-            Line2D([0], [0], color=station_colors[icao][taf_type],
-                   linestyle='-', marker=style['marker'],
-                   markersize=4, linewidth=2, label=icao)
-            for icao in station_codes]
-        legend = fig.legend(
-            handles=handles, title=get_taf_type_long(taf_type),
-            frameon=False, loc='lower left',
-            bbox_to_anchor=(x_anchor, 0.005), ncol=3, fontsize=8)
-        fig.add_artist(legend)
+    fig.legend(handles=handles, title='Scores across airports',
+               frameon=False, loc='center left',
+               bbox_to_anchor=(0.77, 0.5), fontsize=9, title_fontsize=10)
 
 
 def group_score_plots(histories):
@@ -621,64 +642,84 @@ def group_score_plots(histories):
     for hours, group_code, group_label, stations in station_groups:
         if not stations:
             continue
+        stations = sorted(stations)
         group_title = f'{group_label} airports (n={len(stations)})'
-        blues = sample_shades('Blues', len(stations), low=0.35)
-        reds = sample_shades('Reds', len(stations), low=0.35)
-        station_colors = {icao: {'autotaf': blue, 'manual': red}
-                          for icao, blue, red in zip(stations, blues, reds)}
-        legend_rows = (len(stations) + 2) // 3
-        legend_bottom = min(0.38, max(0.16, 0.04 * legend_rows + 0.04))
         for param in PARAMS:
-            fig, ax = plt.subplots(figsize=(14, 8 + 0.24 * legend_rows))
-            score_columns = plot_group_series(
-                ax, histories, stations, param, 'gerrity', station_colors)
-            if score_columns:
-                target = CAA_TARGETS[hours][param]
-                ax.set_title('Gerrity Skill Score by airport', loc='left',
-                             weight='bold')
-                format_skill_axis(ax, score_columns, [target])
+            target = CAA_TARGETS[hours][param]
+            summaries = group_score_summaries(
+                histories, stations, param, 'gerrity')
+            if summaries:
+                fig, ax = plt.subplots(figsize=(12, 6.5))
+                gerrity_columns = plot_group_summaries(ax, summaries)
                 ax.axhline(target, color='#687780', linestyle=':',
                            linewidth=1.5)
-                add_group_legends(fig, stations, station_colors, target)
-                fig.suptitle(f'{group_title} | {PARAMS[param]}', x=0.08,
-                             ha='left', weight='bold', fontsize=17)
-                fig.tight_layout(rect=(0, legend_bottom, 0.72, 0.92))
+                format_skill_axis(ax, gerrity_columns, [target])
+                ax.set_title('Median and percentile scores by rolling window',
+                             loc='left', weight='bold')
+                add_group_legend(fig, target)
+                fig.suptitle(
+                    f'{group_title} | {PARAMS[param]} Gerrity Skill Score',
+                    x=0.08, y=0.96, ha='left', weight='bold', fontsize=15)
+                fig.text(
+                    0.5, 0.025,
+                    'Solid lines show medians; dashed lines show the 25th '
+                    'and 75th percentiles. '
+                    'Airport counts may vary by date.',
+                    ha='center', color='#52616b', fontsize=9)
+                fig.tight_layout(rect=(0, 0.07, 0.74, 0.90))
                 fig.savefig(os.path.join(
                     PLOT_DIR, f'group_{group_code}_{param}_gerrity.png'),
-                    dpi=160)
-            plt.close(fig)
+                    dpi=120)
+                plt.close(fig)
 
             categories = list(TAF_CATS[param].items())
-            ncols = 2
-            nrows = (len(categories) + ncols - 1) // ncols
-            fig, axes = plt.subplots(nrows, ncols,
-                                     figsize=(15, 3.8 * nrows +
-                                              0.24 * legend_rows),
-                                     sharex=True, sharey=False, squeeze=False)
+            ncols = 3
+            category_rows = (len(categories) + ncols - 1) // ncols
+            fig, axes = plt.subplots(category_rows, ncols,
+                                     figsize=(16, 4.5 * category_rows),
+                                     sharex=True, sharey=True, squeeze=False)
             has_data = False
-            for ax, (category, label) in zip(axes.flat, categories):
-                score_columns = plot_group_series(
-                    ax, histories, stations, param, 'peirce', station_colors,
+            peirce_columns = []
+            for index, (category, label) in enumerate(categories):
+                row, col = divmod(index, ncols)
+                ax = axes[row, col]
+                summaries = group_score_summaries(
+                    histories, stations, param, 'peirce',
                     category=int(category))
+                score_columns = plot_group_summaries(ax, summaries)
+                peirce_columns.extend(score_columns)
+                has_data = has_data or bool(score_columns)
                 ax.set_title(f'Category {int(category) + 1}: {label}',
-                             loc='left', weight='bold')
+                             loc='left', weight='bold', fontsize=10)
                 if not score_columns:
-                    ax.text(0.5, 0.5, 'No valid scores in this group',
-                            transform=ax.transAxes, ha='center', va='center',
-                            color='#687780')
-                    continue
-                has_data = True
-                format_skill_axis(ax, score_columns)
-            for ax in list(axes.flat)[len(categories):]:
-                ax.set_visible(False)
+                    ax.text(0.5, 0.5, 'No valid scores',
+                            transform=ax.transAxes, ha='center',
+                            va='center', color='#687780')
+            if len(categories) < category_rows * ncols:
+                for index in range(len(categories), category_rows * ncols):
+                    row, col = divmod(index, ncols)
+                    axes[row, col].set_visible(False)
             if has_data:
-                add_group_legends(fig, stations, station_colors)
-                fig.suptitle(f'{group_title} | {PARAMS[param]} Peirce Skill',
-                             x=0.08, ha='left', weight='bold', fontsize=17)
-                fig.tight_layout(rect=(0, legend_bottom, 0.72, 0.93))
+                for ax in axes.flat:
+                    if not ax.get_visible():
+                        continue
+                    format_skill_axis(ax, peirce_columns)
+                    ax.set_xlabel('')
+                add_group_legend(fig)
+                fig.supxlabel('Verification window end date', y=0.065)
+                fig.suptitle(
+                    f'{group_title} | {PARAMS[param]} Peirce Skill Score',
+                    x=0.08, y=0.96, ha='left', weight='bold', fontsize=15)
+                fig.text(
+                    0.5, 0.025,
+                    'Solid lines show medians; dashed lines show the 25th '
+                    'and 75th percentiles. '
+                    'Airport counts may vary by date.',
+                    ha='center', color='#52616b', fontsize=9)
+                fig.tight_layout(rect=(0.04, 0.11, 0.74, 0.90))
                 fig.savefig(os.path.join(
                     PLOT_DIR, f'group_{group_code}_{param}_peirce.png'),
-                    dpi=160)
+                    dpi=120)
             plt.close(fig)
 
 
