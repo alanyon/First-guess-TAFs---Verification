@@ -392,12 +392,17 @@ def sample_shades(cmap_name, n, low=0.30, high=0.95):
 
 
 SOURCE_STYLES = {
-    'autotaf': {'color': '#007F86', 'linestyle': '-',
+    'autotaf': {'color': '#2166ac', 'linestyle': '-',
                 'marker': 'o', 'markersize': 3},
-    'manual': {'color': '#D55E00', 'linestyle': '--',
+    'manual': {'color': '#b2182b', 'linestyle': '-',
                'marker': 'D', 'markersize': 4}
 }
 GROUPS = {9: '9h', 24: '24h', 30: '30h'}
+HOUR_SOURCE_COLORS = {
+    9: {'autotaf': '#9ecae1', 'manual': '#fcae91'},
+    24: {'autotaf': '#4292c6', 'manual': '#fb6a4a'},
+    30: {'autotaf': '#084594', 'manual': '#a50f15'}}
+TARGET_COLORS = {9: '#777777', 24: '#4d4d4d', 30: '#222222'}
 
 
 def last_non_null(values):
@@ -457,11 +462,13 @@ def skill_figures(icao, param, scores):
         if target is not None:
             ax.axhline(target, color='#687780', linestyle=':', linewidth=1.5,
                        label=f'CAA target ({target:.3f})')
-        ax.legend(title='Forecast source / target', frameon=False,
-                  loc='upper left', bbox_to_anchor=(1.02, 1))
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, title='Forecast source / target',
+               frameon=False, loc='center right',
+               bbox_to_anchor=(0.98, 0.52))
         fig.suptitle(f'{ICAO_DICT[icao]} ({icao}) | {PARAMS[param]}',
                      x=0.08, ha='left', weight='bold', fontsize=17)
-        fig.tight_layout(rect=(0, 0, 0.78, 0.92))
+        fig.tight_layout(rect=(0, 0, 0.72, 0.92))
         fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_gerrity.png'),
                     dpi=160)
         plt.close(fig)
@@ -509,10 +516,10 @@ def skill_figures(icao, param, scores):
                **SOURCE_STYLES[taf_type], linewidth=2)
         for taf_type in TYPE_ORDER]
     fig.legend(handles=legend_handles, title='Forecast source', frameon=False,
-               loc='center left', bbox_to_anchor=(0.81, 0.5))
+               loc='center right', bbox_to_anchor=(0.98, 0.5))
     fig.suptitle(f'{ICAO_DICT[icao]} ({icao}) | {PARAMS[param]} Peirce Skill',
                  x=0.08, ha='left', weight='bold', fontsize=17)
-    fig.tight_layout(rect=(0, 0, 0.8, 0.93))
+    fig.tight_layout(rect=(0, 0, 0.72, 0.93))
     fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_peirce.png'), dpi=160)
     plt.close(fig)
 
@@ -566,8 +573,8 @@ def plot_group_series(ax, histories, station_codes, param, metric,
 
 def add_group_legends(fig, station_codes, station_colors, target=None):
     source_handles = [
-        Line2D([0], [0], color='#3f4d53',
-               linestyle=SOURCE_STYLES[taf_type]['linestyle'], linewidth=2,
+        Line2D([0], [0], color=SOURCE_STYLES[taf_type]['color'],
+               linestyle='-', linewidth=2,
                label=get_taf_type_long(taf_type))
         for taf_type in TYPE_ORDER]
     if target is not None:
@@ -576,15 +583,15 @@ def add_group_legends(fig, station_codes, station_colors, target=None):
             label=f'CAA target ({target:.3f})'))
     source_legend = fig.legend(
         handles=source_handles,
-        title='Source style / target' if target is not None else 'Source style',
-        frameon=False,
-        loc='upper left', bbox_to_anchor=(0.81, 0.9))
+        title='Forecast source / target' if target is not None
+        else 'Forecast source',
+        frameon=False, loc='upper right', bbox_to_anchor=(0.98, 0.98))
     fig.add_artist(source_legend)
     for taf_type, x_anchor in (('autotaf', 0.02), ('manual', 0.40)):
         style = SOURCE_STYLES[taf_type]
         handles = [
             Line2D([0], [0], color=station_colors[icao][taf_type],
-                   linestyle=style['linestyle'], marker=style['marker'],
+                   linestyle='-', marker=style['marker'],
                    markersize=4, linewidth=2, label=icao)
             for icao in station_codes]
         legend = fig.legend(
@@ -635,7 +642,7 @@ def group_score_plots(histories):
                 add_group_legends(fig, stations, station_colors, target)
                 fig.suptitle(f'{group_title} | {PARAMS[param]}', x=0.08,
                              ha='left', weight='bold', fontsize=17)
-                fig.tight_layout(rect=(0, legend_bottom, 0.78, 0.92))
+                fig.tight_layout(rect=(0, legend_bottom, 0.72, 0.92))
                 fig.savefig(os.path.join(
                     PLOT_DIR, f'group_{group_code}_{param}_gerrity.png'),
                     dpi=160)
@@ -668,7 +675,7 @@ def group_score_plots(histories):
                 add_group_legends(fig, stations, station_colors)
                 fig.suptitle(f'{group_title} | {PARAMS[param]} Peirce Skill',
                              x=0.08, ha='left', weight='bold', fontsize=17)
-                fig.tight_layout(rect=(0, legend_bottom, 0.78, 0.93))
+                fig.tight_layout(rect=(0, legend_bottom, 0.72, 0.93))
                 fig.savefig(os.path.join(
                     PLOT_DIR, f'group_{group_code}_{param}_peirce.png'),
                     dpi=160)
@@ -708,8 +715,9 @@ def median_score_plots(histories):
                     continue
                 label = f'Median {hours}-hour {get_taf_type_long(taf_type)}'
                 ax.plot(
-                    median.index, median.values, color=HOUR_COLORS[hours],
-                    linestyle=SOURCE_STYLES[taf_type]['linestyle'],
+                    median.index, median.values,
+                    color=HOUR_SOURCE_COLORS[hours][taf_type],
+                    linestyle='-',
                     marker=SOURCE_STYLES[taf_type]['marker'], markersize=3,
                     linewidth=2, label=label)
                 median_columns.append(median)
@@ -718,7 +726,7 @@ def median_score_plots(histories):
             if length_columns:
                 target = CAA_TARGETS[hours][param]
                 ax.axhline(
-                    target, color=HOUR_COLORS[hours], linestyle=':',
+                    target, color=TARGET_COLORS[hours], linestyle=':',
                     linewidth=1.5,
                     label=f'{hours}-hour CAA target ({target:.3f})')
                 target_values.append(target)
@@ -727,12 +735,14 @@ def median_score_plots(histories):
             plt.close(fig)
             continue
         format_skill_axis(ax, median_columns, target_values)
-        ax.legend(title='Median scores / CAA targets', frameon=False,
-                  loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9)
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, title='Median scores / CAA targets',
+               frameon=False, loc='center right',
+               bbox_to_anchor=(0.98, 0.5), fontsize=9)
         fig.suptitle(f'CAA Airport Median Gerrity Skill Score | '
                      f'{PARAMS[param]}', x=0.08, ha='left', weight='bold',
                      fontsize=17)
-        fig.tight_layout(rect=(0, 0, 0.76, 0.92))
+        fig.tight_layout(rect=(0, 0, 0.70, 0.92))
         fig.savefig(os.path.join(
             PLOT_DIR, f'median_{param}_gerrity.png'), dpi=160)
         plt.close(fig)
