@@ -153,27 +153,36 @@ def conf_figure(icao, icao_file_list, param, normalize=True):
             number_format = ''
         category_labels = [TAF_CATS[param][str(i)]
                            for i in range(counts.shape[0])]
+        x_category_labels = [
+            label.replace('-', '-\n', 1) if '-' in label else
+            f'{label[:2]}\n{label[2:]}' if label.startswith(('<=', '>='))
+            else label
+            for label in category_labels]
         sns.heatmap(
             values, annot=annotations, fmt=number_format,
             annot_kws={'fontsize': 9}, cmap='YlGnBu', vmin=0,
             vmax=vmax, linewidths=0.5, linecolor='white', square=True, ax=ax,
             xticklabels=category_labels, yticklabels=category_labels,
-            cbar_kws={'label': colorbar_label})
-        ax.set_xlabel('Observed category')
-        ax.set_ylabel('Forecast category')
-        ax.set_title(get_taf_type_long(taf_type), weight='bold')
+            cbar_kws={'label': colorbar_label, 'shrink': 0.87})
+        colorbar = ax.collections[0].colorbar
+        colorbar.ax.tick_params(labelsize=10)
+        colorbar.set_label(colorbar_label, fontsize=11)
+        ax.set_xlabel('Observed category', fontsize=13)
+        ax.set_ylabel('Forecast category', fontsize=13)
+        ax.set_title(get_taf_type_long(taf_type), weight='bold', fontsize=13)
         ax.set_xticks(np.arange(len(category_labels)) + 0.5)
-        ax.set_xticklabels(category_labels, rotation=45, ha='center',
-                    rotation_mode='anchor')
-        ax.tick_params(axis='y', labelrotation=0)
+        ax.set_xticklabels(x_category_labels, rotation=0, ha='center',
+                           fontsize=10, linespacing=0.95)
+        ax.set_yticklabels(category_labels, rotation=0, fontsize=10)
+        ax.tick_params(axis='x', pad=6)
 
     fig.suptitle(f'{ICAO_DICT.get(icao, icao)} ({icao}) | {PARAMS[param]}',
-                 x=0.06, ha='left', weight='bold', fontsize=17)
+                 x=0.06, ha='left', weight='bold', fontsize=15)
     caption = ('Each observed-category column is normalized to 100%.'
                if normalize else
                'Counts use k=1,000 and M=1,000,000; probability-weighted values may be fractional.')
-    fig.text(0.5, 0.025, caption, ha='center', color='#52616b')
-    fig.tight_layout(rect=(0, 0.13, 1, 0.93))
+    fig.text(0.5, 0.025, caption, ha='center', color='#52616b', fontsize=10)
+    fig.tight_layout(rect=(0, 0.17, 1, 0.93))
     suffix = 'confusion' if normalize else 'confusion_counts'
     fig.savefig(os.path.join(PLOT_DIR, f'{icao}_{param}_{suffix}.png'),
                 dpi=160)
