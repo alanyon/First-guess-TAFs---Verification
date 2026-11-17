@@ -653,7 +653,8 @@ def group_score_plots(histories):
                 gerrity_columns = plot_group_summaries(ax, summaries)
                 ax.axhline(target, color='#687780', linestyle=':',
                            linewidth=1.5)
-                format_skill_axis(ax, gerrity_columns, [target])
+                format_skill_axis(ax, gerrity_columns, [target],
+                                  adaptive_month_ticks=True)
                 ax.set_title('Median and percentile scores by rolling window',
                              loc='left', weight='bold')
                 add_group_legend(fig, target)
@@ -703,7 +704,8 @@ def group_score_plots(histories):
                 for ax in axes.flat:
                     if not ax.get_visible():
                         continue
-                    format_skill_axis(ax, peirce_columns)
+                    format_skill_axis(ax, peirce_columns,
+                                      adaptive_month_ticks=True)
                     ax.set_xlabel('')
                 add_group_legend(fig)
                 fig.supxlabel('Verification window end date', y=0.065)
@@ -775,7 +777,8 @@ def median_score_plots(histories):
         if not median_columns:
             plt.close(fig)
             continue
-        format_skill_axis(ax, median_columns, target_values)
+        format_skill_axis(ax, median_columns, target_values,
+                  adaptive_month_ticks=True)
         handles, labels = ax.get_legend_handles_labels()
         fig.legend(handles, labels, title='Median scores / CAA targets',
                frameon=False, loc='center right',
