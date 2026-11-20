@@ -9,7 +9,7 @@
 export VERIF_PROFILE=${VERIF_PROFILE:-standard}
 
 # For decoding and verification of TAFs
-VER_DATES=20230805-20261106
+VER_DATES=20230805-20261106_test
 export DATA_DIR=/data/users/andre.lanyon/tafs/verification/${VER_DATES}
 export DECODE_DIR=${DATA_DIR}/decodes
 
@@ -85,8 +85,8 @@ case "${VERIF_PROFILE}" in
                           Manual_ml"
         export TAF_TYPES_SHORT="on om ma"
         export COMBS="onom onma omma"
-        export PLOT_TITLES='{"on": "Optimistic/Pessimistic Mix TAFs\n(without ML)",
-                             "om": "Optimistic/Pessimistic Mix TAFs\n(with ML)",
+        export PLOT_TITLES='{"on": "Auto TAFs without ML",
+                             "om": "Auto TAFs with ML",
                              "ma": "Manual TAFs"}'
         export ML_FACTOR=0.25
         ;;
